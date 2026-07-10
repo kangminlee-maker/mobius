@@ -27,5 +27,11 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST
-codesign --force -s - "$APP"
+# 고정 인증서가 있으면 그걸로 서명 (Keychain "항상 허용"이 리빌드 후에도 유지됨).
+# 없으면 ad-hoc 폴백 — Scripts/setup-signing.sh 로 인증서를 만들 수 있다.
+if security find-identity -v -p codesigning | grep -q "Mobius Dev Signing"; then
+  codesign --force -s "Mobius Dev Signing" "$APP"
+else
+  codesign --force -s - "$APP"
+fi
 echo "OK: $APP (open $APP 으로 실행)"
