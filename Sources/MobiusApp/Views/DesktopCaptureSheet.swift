@@ -29,7 +29,7 @@ struct DesktopCaptureSheet: View {
                 VStack(alignment: .leading, spacing: 10) {
                     stepRow(1, "Claude Desktop을 로그아웃하고 다시 엽니다", launchState(session.step))
                     stepRow(2, "\(session.nickname) 계정으로 로그인하세요", loginState(session.step))
-                    stepRow(3, "로그인이 감지되면 자동 저장됩니다", saveState(session.step))
+                    stepRow(3, "'로그인 완료 — 저장'을 누르면 저장됩니다", saveState(session.step))
                 }
 
                 statusLine(session.step)
@@ -108,13 +108,15 @@ struct DesktopCaptureSheet: View {
                   systemImage: "checkmark.circle.fill")
                 .font(.system(size: 10)).foregroundStyle(accent)
         case .waitingLogin:
-            Text("현재 로그인은 로그아웃되었습니다. Claude Desktop 창에서 이 계정으로 로그인하면 자동 저장됩니다.")
+            Text("Claude Desktop이 로그아웃되고 다시 열렸습니다. 그 창에서 **\(session?.nickname ?? "이 계정")** 계정으로 로그인한 뒤, 아래 '로그인 완료 — 저장'을 눌러주세요.")
                 .font(.system(size: 10)).foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
         default:
             EmptyView()
         }
     }
+
+    private var session: AppState.DesktopCaptureSession? { state.desktopCapture }
 
     @ViewBuilder private func buttons(_ step: AppState.DesktopCaptureSession.Step) -> some View {
         HStack {
@@ -124,10 +126,18 @@ struct DesktopCaptureSheet: View {
                 Button("닫기") { state.endDesktopCapture() }
                     .buttonStyle(.borderedProminent).tint(accent).controlSize(.small)
             case .failed:
-                Spacer()
-                Button("닫기") { state.endDesktopCapture() }
+                Button("취소") { state.endDesktopCapture() }
                     .buttonStyle(.bordered).controlSize(.small)
-            case .launching, .saving, .waitingLogin:
+                Spacer()
+                Button("로그인 완료 — 저장") { state.captureDesktopNow() }
+                    .buttonStyle(.borderedProminent).tint(accent).controlSize(.small)
+            case .waitingLogin:
+                Button("취소") { state.endDesktopCapture() }
+                    .buttonStyle(.bordered).controlSize(.small)
+                Spacer()
+                Button("로그인 완료 — 저장") { state.captureDesktopNow() }
+                    .buttonStyle(.borderedProminent).tint(accent).controlSize(.small)
+            case .launching, .saving:
                 // 취소 시 강제 로그아웃했던 원래 세션을 되돌린다
                 Button("취소") { state.endDesktopCapture() }
                     .buttonStyle(.bordered).controlSize(.small)

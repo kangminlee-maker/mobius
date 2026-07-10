@@ -354,28 +354,28 @@ final class AppState: ObservableObject {
         await desktopCoordinator.launch()
         guard !Task.isCancelled, desktopCapture?.accountID == id else { return }
         desktopCapture?.step = .waitingLogin
+        // 자동 감지는 로그인 전 빈 세션을 오인 캡처할 수 있어 폐기 —
+        // 사용자가 로그인을 마친 뒤 직접 '로그인 완료 — 저장'(captureDesktopNow)을 누른다.
+        // 강제 로그아웃 상태이므로 그 시점의 세션은 반드시 방금 로그인한 그 계정이라 안전하다.
+        // (여기서는 태스크가 끝나도 desktopCapture 세션은 유지 — 버튼이 저장을 트리거)
+        desktopCaptureTask = nil
+    }
 
-        // 2. 로그아웃 상태라 신원 파일이 없다. 새 로그인 = 파일이 생기고 2초간 안정화되면 완료.
-        var lastSeen: Date?
-        var stableSince: Date?
-        let deadline = Date().addingTimeInterval(300)
-        while Date() < deadline {
-            do { try await Task.sleep(for: .seconds(1)) } catch { return } // 취소됨
-            guard desktopCapture?.accountID == id else { return }
-            guard let current = desktopSwitcher.identityLastModified() else { continue } // 아직 로그아웃
-            if current != lastSeen {
-                lastSeen = current
-                stableSince = Date()
-            } else if let s = stableSince, Date().timeIntervalSince(s) >= 2 {
-                desktopCaptureTask = nil
-                finishDesktopCapture(for: id)
-                return
-            }
-        }
-        desktopCapture?.step = .failed("5분 안에 로그인이 감지되지 않았습니다. 다시 시도해주세요.")
+    /// '로그인 완료 — 저장': 사용자가 Desktop에서 대상 계정으로 로그인한 뒤 누른다.
+    func captureDesktopNow() {
+        guard let session = desktopCapture else { return }
+        desktopCaptureTask?.cancel()
+        desktopCaptureTask = nil
+        finishDesktopCapture(for: session.accountID)
     }
 
     private func finishDesktopCapture(for id: UUID) {
+        // 로그인 전(신원 파일 없음)에 저장을 누른 경우 빈 세션을 캡처하지 않도록 막는다.
+        guard desktopSwitcher.identityLastModified() != nil else {
+            desktopCapture?.step = .failed(
+                "아직 로그인이 감지되지 않았어요. Claude Desktop에서 로그인을 마친 뒤 다시 저장을 눌러주세요.")
+            return
+        }
         desktopCapture?.step = .saving
         do {
             try desktopSwitcher.capture(for: id)
