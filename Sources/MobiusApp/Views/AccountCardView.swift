@@ -101,7 +101,9 @@ struct AccountCardView: View {
                         .frame(width: max(3, geo.size.width * min(percent, 100) / 100))
                 }
             }
-            .frame(width: 78, height: 4)
+            // 바는 유연하게 — 공간이 부족하면 텍스트 대신 바가 줄어든다
+            .frame(minWidth: 36, maxWidth: 78)
+            .frame(height: 4)
             Text("\(Int(percent))%")
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(gaugeColor(percent))
@@ -109,7 +111,7 @@ struct AccountCardView: View {
             if let resetsAt, resetsAt > now {
                 Text("초기화 \(remainText(until: resetsAt))")
                     .font(.system(size: 9)).foregroundStyle(.tertiary)
-                    .lineLimit(1).layoutPriority(1) // 초기화 시간은 잘리지 않게 우선 배치
+                    .lineLimit(1).fixedSize().layoutPriority(1) // 절대 잘리지 않게 — 바가 대신 줄어든다
             }
             Spacer(minLength: 0)
         }
