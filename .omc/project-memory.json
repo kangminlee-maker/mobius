@@ -79,15 +79,15 @@
       "type": "file"
     },
     {
-      "path": "Sources/MobiusCore/AccountStore.swift",
-      "accessCount": 13,
-      "lastAccessed": 1783703086609,
+      "path": "Sources/MobiusCore/Switcher.swift",
+      "accessCount": 14,
+      "lastAccessed": 1783704080888,
       "type": "file"
     },
     {
-      "path": "Sources/MobiusCore/Switcher.swift",
+      "path": "Sources/MobiusCore/AccountStore.swift",
       "accessCount": 13,
-      "lastAccessed": 1783703344456,
+      "lastAccessed": 1783703086609,
       "type": "file"
     },
     {
@@ -104,8 +104,8 @@
     },
     {
       "path": "Sources/MobiusCore/ClaudeConfigIO.swift",
-      "accessCount": 7,
-      "lastAccessed": 1783703242043,
+      "accessCount": 8,
+      "lastAccessed": 1783704060405,
       "type": "file"
     },
     {

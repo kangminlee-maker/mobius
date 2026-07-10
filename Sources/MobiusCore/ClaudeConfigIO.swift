@@ -14,19 +14,20 @@ public struct ClaudeConfigIO: Sendable {
 
     // MARK: 읽기
 
-    /// 현재 로그인 상태의 스냅샷. 로그아웃 상태(파일·Keychain 둘 다 없음)면 nil.
+    /// 현재 로그인 상태의 스냅샷. 로그아웃 상태(Keychain·파일 둘 다 없음)면 nil.
     ///
-    /// 읽기는 .credentials.json 파일을 우선한다 — Claude Code가 Keychain과 파일을
-    /// 항상 동기화하므로 내용이 같고, 파일 읽기는 Keychain 승인창을 띄우지 않는다
-    /// (15초 주기 reconcile마다 승인창이 뜨는 문제 방지). Keychain 읽기는 파일이
-    /// 없는 예외 상황의 폴백일 뿐이며, 쓰기(전환)는 여전히 양쪽 모두 수행한다.
+    /// **Keychain을 진실의 원천으로 삼는다** — 실측 결과 이 환경의 Claude Code는
+    /// 최신 토큰을 Keychain "Claude Code-credentials"에 쓰고 .credentials.json 파일은
+    /// 갱신하지 않는다(낡음). 파일을 우선 읽으면 낡은 토큰이 최신 이메일과 짝지어져
+    /// 프로필이 오염된다(실측 버그). 파일은 Keychain이 비었을 때의 폴백일 뿐이다.
+    /// 호출측이 매 틱 이걸 부르지 않도록 상위에서 변화 감지로 게이팅한다(승인창 최소화).
     public func readLiveSnapshot() throws -> CredentialsSnapshot? {
         let blob: Data
-        if let fileData = try? Data(contentsOf: env.credentialsFile), !fileData.isEmpty {
-            blob = fileData
-        } else if let keychainBlob = try keychain.read(service: env.claudeKeychainService,
-                                                       account: env.claudeKeychainAccount) {
+        if let keychainBlob = try keychain.read(service: env.claudeKeychainService,
+                                                account: env.claudeKeychainAccount) {
             blob = keychainBlob
+        } else if let fileData = try? Data(contentsOf: env.credentialsFile), !fileData.isEmpty {
+            blob = fileData
         } else {
             return nil
         }

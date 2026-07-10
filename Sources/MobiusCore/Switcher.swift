@@ -76,13 +76,20 @@ public final class Switcher: @unchecked Sendable {
     /// 그 프로필을 활성으로 표시하고 최신 토큰을 흡수한다. 모르는 계정이면 손대지 않는다.
     public func reconcile() throws {
         guard liveStable else { return }
+        // 이메일은 .claude.json에서 읽어 승인창이 없다. 활성 계정이 그대로면
+        // Keychain(토큰) 읽기를 아예 하지 않아 15초 주기 승인창 폭탄을 막는다.
         guard let email = try io.liveEmail(),
               let profile = store.file.accounts.first(where: { $0.emailAddress == email })
         else { return }
+        let activeUnchanged = store.file.activeAccountID == profile.id
+        let alreadyHasSecret = (try? store.secret(for: profile.id)) != nil
+        if activeUnchanged && alreadyHasSecret { return } // 정상 상태 — Keychain 접근 없음
+
+        // 여기부터는 외부 전환/최초 흡수 등 실제 변화가 있을 때만 (드묾) Keychain 1회 접근.
         if let live = try io.readLiveSnapshot() {
             try store.setSecret(live, for: profile.id)
         }
-        if store.file.activeAccountID != profile.id {
+        if !activeUnchanged {
             try store.setActive(profile.id)
             // 외부(사용자) 로그인으로 활성이 바뀐 것 — 자동 전환 상태가 아니므로
             // 플래그를 내려 onTick의 primary 자동 복귀를 막는다 (앱·CLI 공통 경로).
