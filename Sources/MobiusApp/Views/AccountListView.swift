@@ -37,6 +37,33 @@ struct AccountListView: View {
         .onAppear { state.reload(); state.refreshUsageIfStale(); now = Date() }
     }
 
+    @State private var showFallbackInfo = false
+
+    private var fallbackInfoButton: some View {
+        Button { showFallbackInfo.toggle() } label: {
+            Image(systemName: "info.circle")
+                .font(.system(size: 11)).foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+        .help("자동 Fallback이 무엇인지 보기")
+        .popover(isPresented: $showFallbackInfo, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("자동 Fallback", systemImage: "infinity")
+                    .font(.system(size: 12, weight: .semibold))
+                Text("사용하던 계정의 한도가 다 차면, 아래 순서(우선순위)대로 여유 있는 다음 계정으로 자동 전환됩니다.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                Text("맨 위 계정의 한도가 초기화되면 다시 맨 위 계정으로 돌아옵니다.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                Divider()
+                Text("끄면 자동 전환 없이 한도 소진 알림만 보냅니다. 계정은 카드를 눌러 직접 바꿀 수 있어요.")
+                    .font(.system(size: 11)).foregroundStyle(.tertiary)
+            }
+            .padding(14)
+            .frame(width: 260)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     private var header: some View {
         HStack {
             Image(systemName: "infinity")
@@ -45,6 +72,7 @@ struct AccountListView: View {
             Text("Mobius").font(.system(size: 14, weight: .bold, design: .rounded))
             Text("뫼비우스").font(.system(size: 10)).foregroundStyle(.tertiary)
             Spacer()
+            fallbackInfoButton
             Toggle("Claude Code CLI 자동 Fallback", isOn: Binding(
                 get: { state.file.autoSwitchEnabled },
                 set: { state.setAutoSwitch($0) }))
