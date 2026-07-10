@@ -60,9 +60,15 @@ struct AccountCardView: View {
             if onConnectDesktop != nil || onDelete != nil {
                 Menu {
                     if let onConnectDesktop {
+                        // Desktop 연결은 이 계정이 '현재 활성'일 때만 — 캡처는 활성 세션을
+                        // 잡으므로, 비활성 계정에서 연결하면 엉뚱한 계정이 저장된다.
                         Button(profile.hasDesktopSnapshot
                                ? "Claude Desktop 다시 연결" : "Claude Desktop 연결",
                                systemImage: "macwindow") { onConnectDesktop() }
+                            .disabled(!isActive)
+                        if !isActive {
+                            Text("이 계정으로 전환한 뒤 연결할 수 있어요")
+                        }
                     }
                     if let onDelete {
                         Button("계정 삭제", systemImage: "trash", role: .destructive) { onDelete() }

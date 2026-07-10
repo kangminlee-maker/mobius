@@ -316,6 +316,11 @@ final class AppState: ObservableObject {
     func beginDesktopCapture(for id: UUID) {
         guard desktopCapture == nil else { return } // 진행 중이면 중복 방지
         guard let profile = store.file.accounts.first(where: { $0.id == id }) else { return }
+        // 안전 가드: Desktop 캡처는 현재 활성 계정의 세션을 잡으므로, 활성 계정에서만 허용한다.
+        guard id == store.file.activeAccountID else {
+            lastError = "먼저 이 계정으로 전환한 뒤 Claude Desktop을 연결하세요."
+            return
+        }
         guard desktopSwitcher.isDesktopInstalled else {
             lastError = "Claude Desktop이 설치되어 있지 않습니다."
             return
