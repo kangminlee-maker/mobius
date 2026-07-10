@@ -8,6 +8,9 @@ struct AccountCardView: View {
     let autoSwitchOn: Bool
     let usage: UsageSnapshot?
     let now: Date
+    /// Desktop 설치 시에만 전달 — 눈에 보이는 ⋯ 메뉴에 "Claude Desktop 연결" 노출
+    var onConnectDesktop: (() -> Void)? = nil
+    var onDelete: (() -> Void)? = nil
 
     private let accent = Color(red: 0.35, green: 0.65, blue: 1.0)
 
@@ -53,6 +56,25 @@ struct AccountCardView: View {
             if isActive {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(accent).font(.system(size: 16))
+            }
+            if onConnectDesktop != nil || onDelete != nil {
+                Menu {
+                    if let onConnectDesktop {
+                        Button(profile.hasDesktopSnapshot
+                               ? "Claude Desktop 다시 연결" : "Claude Desktop 연결",
+                               systemImage: "macwindow") { onConnectDesktop() }
+                    }
+                    if let onDelete {
+                        Button("계정 삭제", systemImage: "trash", role: .destructive) { onDelete() }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 10)

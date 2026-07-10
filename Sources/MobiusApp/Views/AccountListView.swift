@@ -85,7 +85,10 @@ struct AccountListView: View {
         AccountCardView(profile: p, isActive: p.id == state.file.activeAccountID,
                         isPrimary: isPrimary,
                         autoSwitchOn: state.file.autoSwitchEnabled,
-                        usage: usageFor(p), now: now)
+                        usage: usageFor(p), now: now,
+                        onConnectDesktop: state.desktopSwitcher.isDesktopInstalled
+                            ? { state.beginDesktopCapture(for: p.id) } : nil,
+                        onDelete: { state.removeAccount(p.id) })
             .matchedGeometryEffect(id: p.id, in: cardSpace)
             .onTapGesture {
                 guard p.id != state.file.activeAccountID else { return }
