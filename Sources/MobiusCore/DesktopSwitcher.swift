@@ -55,12 +55,45 @@ public final class DesktopSwitcher: Sendable {
                 guard fm.fileExists(atPath: src.path) else { continue }
                 try fm.copyItem(at: src, to: tmp.appendingPathComponent(item))
             }
+            try captureConfigAuth(to: tmp) // ★ config.json의 로그인 토큰(oauth 키)도 저장
             try? fm.removeItem(at: dir)
             try fm.moveItem(at: tmp, to: dir) // 같은 볼륨 rename — 부분 스냅샷이 남지 않음
         } catch {
             try? fm.removeItem(at: tmp)
             throw error
         }
+    }
+
+    static let authFile = "__desktop_auth.json"
+    /// config.json에서 **계정 로그인에 해당하는 키만** 가려낸다 (앱 설정은 절대 스왑 안 함).
+    static func isAccountAuthKey(_ key: String) -> Bool {
+        key.hasPrefix("oauth:") || key == "lastKnownAccountUuid"
+    }
+
+    /// 현재 config.json의 로그인 키(oauth:*, lastKnownAccountUuid)만 스냅샷에 저장.
+    private func captureConfigAuth(to dir: URL) throws {
+        guard let data = try? Data(contentsOf: env.desktopConfigFile),
+              let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return }
+        let auth = dict.filter { Self.isAccountAuthKey($0.key) }
+        let out = try JSONSerialization.data(withJSONObject: auth, options: [.sortedKeys])
+        try out.write(to: dir.appendingPathComponent(Self.authFile))
+    }
+
+    /// 스냅샷의 로그인 키를 라이브 config.json에 반영 — 기존 로그인 키는 지우고 스냅샷 것으로
+    /// 교체하되, **로그인 외 앱 설정 키는 모두 그대로 보존**한다 (원자적 쓰기).
+    private func restoreConfigAuth(from dir: URL) throws {
+        guard let authData = try? Data(contentsOf: dir.appendingPathComponent(Self.authFile)),
+              let auth = try JSONSerialization.jsonObject(with: authData) as? [String: Any]
+        else { return }
+        var live: [String: Any] = [:]
+        if let liveData = try? Data(contentsOf: env.desktopConfigFile) {
+            live = (try JSONSerialization.jsonObject(with: liveData) as? [String: Any]) ?? [:]
+        }
+        for k in live.keys where Self.isAccountAuthKey(k) { live.removeValue(forKey: k) }
+        for (k, v) in auth { live[k] = v }
+        let out = try JSONSerialization.data(withJSONObject: live, options: [.sortedKeys])
+        try out.write(to: env.desktopConfigFile, options: .atomic)
     }
 
     /// 스냅샷을 Desktop 데이터 디렉토리로 복원 (Desktop 종료 상태 전제).
@@ -91,6 +124,7 @@ public final class DesktopSwitcher: Sendable {
                     try fm.moveItem(at: src, to: dst)
                 }
             }
+            try restoreConfigAuth(from: dir) // ★ config.json의 로그인 토큰도 이 계정 것으로 교체
             try? fm.removeItem(at: staging)
         } catch {
             try? fm.removeItem(at: staging)

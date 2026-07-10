@@ -29,6 +29,11 @@ public struct MobiusEnvironment: Sendable {
     public var desktopDataDir: URL {
         home.appendingPathComponent("Library/Application Support/Claude")
     }
+    /// Claude Desktop의 앱 설정 — ★ 로그인 토큰(oauth:tokenCache 등)이 여기 저장된다.
+    /// 신원 파일(Cookies 등)만으로는 계정이 안 바뀌므로 이 파일의 oauth 키도 함께 스왑해야 한다.
+    public var desktopConfigFile: URL {
+        desktopDataDir.appendingPathComponent("config.json")
+    }
     /// 계정별 Desktop 신원 스냅샷 보관소
     public var desktopProfilesDir: URL {
         appSupportDir.appendingPathComponent("desktop-profiles")

@@ -55,6 +55,36 @@ final class DesktopSwitcherTests: XCTestCase {
         XCTAssertNil(try sw.stashLiveIdentity()) // 더 치울 게 없음
     }
 
+    private func writeConfig(_ dict: [String: Any]) throws {
+        let data = try JSONSerialization.data(withJSONObject: dict)
+        try data.write(to: env.desktopConfigFile)
+    }
+    private func readConfig() throws -> [String: Any] {
+        try JSONSerialization.jsonObject(
+            with: Data(contentsOf: env.desktopConfigFile)) as! [String: Any]
+    }
+
+    func testConfigAuthSwappedButAppSettingsPreserved() throws {
+        let idA = UUID(); let idB = UUID()
+        // A 로그인 상태: 로그인 키 + 앱 설정
+        try writeConfig(["oauth:tokenCache": "A-token",
+                         "lastKnownAccountUuid": "uuid-A",
+                         "locale": "ko", "userThemeMode": "dark"])
+        try sw.capture(for: idA)
+        // B 로그인 상태로 바뀜 (앱 설정 locale도 사용자가 바꿈)
+        try writeConfig(["oauth:tokenCache": "B-token",
+                         "lastKnownAccountUuid": "uuid-B",
+                         "locale": "en", "userThemeMode": "dark"])
+        try sw.capture(for: idB)
+        // A로 복원 → 로그인 키는 A, 앱 설정(locale=en)은 현재 값 보존
+        try sw.restore(for: idA)
+        let cfg = try readConfig()
+        XCTAssertEqual(cfg["oauth:tokenCache"] as? String, "A-token")     // 로그인은 A로
+        XCTAssertEqual(cfg["lastKnownAccountUuid"] as? String, "uuid-A")
+        XCTAssertEqual(cfg["locale"] as? String, "en")                     // 앱 설정 보존
+        XCTAssertEqual(cfg["userThemeMode"] as? String, "dark")
+    }
+
     func testDeleteSnapshot() throws {
         let id = UUID()
         try sw.capture(for: id)
