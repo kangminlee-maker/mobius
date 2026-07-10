@@ -54,6 +54,12 @@ final class AppState: ObservableObject {
             forName: MobiusNotification.accountsChanged, object: nil, queue: .main
         ) { [weak self] _ in Task { @MainActor in self?.reload() } }
 
+        // 앱 실행 시 Claude 자격증명 Keychain에 한 번 접근해 권한을 미리 받는다 —
+        // 여기서 '항상 허용'을 한 번 누르면, 이후 계정 추가/전환 각 단계마다 반복해서
+        // 권한 요청이 뜨지 않는다. (ACL이 이미 허용돼 있으면 조용히 지나간다.)
+        let ioForWarmup = io
+        Task.detached(priority: .utility) { _ = try? ioForWarmup.readLiveSnapshot() }
+
         // 15초 주기: 로그 스캔 → 자동 전환 판단 → reconcile
         timer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.tick() }
