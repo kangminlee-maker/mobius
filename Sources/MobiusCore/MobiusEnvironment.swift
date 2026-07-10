@@ -18,6 +18,12 @@ public struct MobiusEnvironment: Sendable {
         home.appendingPathComponent("Library/Application Support/Mobius")
     }
     public var accountsFile: URL { appSupportDir.appendingPathComponent("accounts.json") }
+    /// 계정별 자격증명 스냅샷 보관소(0700). Claude Code 자신도 토큰을 .credentials.json(0600)에
+    /// 두므로 동일 보안 수준이며, Keychain 승인창이 뜨지 않아 UX가 크게 개선된다.
+    public var secretsDir: URL { appSupportDir.appendingPathComponent("secrets") }
+    public func secretFile(for id: UUID) -> URL {
+        secretsDir.appendingPathComponent("\(id.uuidString).json")
+    }
 
     /// Claude Desktop(Electron)의 데이터 디렉토리
     public var desktopDataDir: URL {

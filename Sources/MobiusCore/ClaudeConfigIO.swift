@@ -50,6 +50,22 @@ public struct ClaudeConfigIO: Sendable {
         try readOAuthAccountDict()?["emailAddress"] as? String
     }
 
+    /// 라이브 상태가 안정적인지 — 즉 Claude Code가 토큰 파일(.credentials.json)과
+    /// 이메일 파일(~/.claude.json)을 "지금 갱신 중"이 아닌지 판별한다.
+    ///
+    /// 두 파일에는 공통 계정 식별자가 없어(토큰 파일엔 email 없음, email 파일엔 token 없음)
+    /// 로그인/전환으로 둘이 순차 갱신되는 찰나에 읽으면 "새 토큰 + 옛 이메일"이 섞여
+    /// 프로필에 잘못 저장될 수 있다. 두 파일 모두 최근 `window`초 내 수정이 없을 때만
+    /// 일관적이라고 보고, 저장 계열 연산(resave/adopt/reconcile)을 이때만 수행한다.
+    public func liveIsStable(now: Date = Date(), window: TimeInterval = 2) -> Bool {
+        for url in [env.credentialsFile, env.claudeJSON] {
+            guard let m = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
+                .contentModificationDate else { continue }
+            if now.timeIntervalSince(m) < window { return false }
+        }
+        return true
+    }
+
     // MARK: 쓰기
 
     public func writeLiveSnapshot(_ snap: CredentialsSnapshot) throws {

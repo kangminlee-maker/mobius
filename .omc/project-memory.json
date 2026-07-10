@@ -68,14 +68,26 @@
     },
     {
       "path": "Sources/MobiusApp/LoginFlow.swift",
-      "accessCount": 18,
-      "lastAccessed": 1783702703858,
+      "accessCount": 19,
+      "lastAccessed": 1783703304435,
       "type": "file"
     },
     {
       "path": "Sources/MobiusApp/Views/AccountListView.swift",
       "accessCount": 16,
       "lastAccessed": 1783701352865,
+      "type": "file"
+    },
+    {
+      "path": "Sources/MobiusCore/AccountStore.swift",
+      "accessCount": 13,
+      "lastAccessed": 1783703086609,
+      "type": "file"
+    },
+    {
+      "path": "Sources/MobiusCore/Switcher.swift",
+      "accessCount": 13,
+      "lastAccessed": 1783703344456,
       "type": "file"
     },
     {
@@ -91,9 +103,9 @@
       "type": "file"
     },
     {
-      "path": "Sources/MobiusCore/Switcher.swift",
+      "path": "Sources/MobiusCore/ClaudeConfigIO.swift",
       "accessCount": 7,
-      "lastAccessed": 1783700778800,
+      "lastAccessed": 1783703242043,
       "type": "file"
     },
     {
@@ -103,21 +115,9 @@
       "type": "file"
     },
     {
-      "path": "Sources/MobiusCore/AccountStore.swift",
-      "accessCount": 6,
-      "lastAccessed": 1783695671328,
-      "type": "file"
-    },
-    {
       "path": "Sources/MobiusCore/AutoSwitchEngine.swift",
       "accessCount": 6,
       "lastAccessed": 1783695689535,
-      "type": "file"
-    },
-    {
-      "path": "Sources/MobiusCore/ClaudeConfigIO.swift",
-      "accessCount": 6,
-      "lastAccessed": 1783702344586,
       "type": "file"
     },
     {
@@ -136,6 +136,12 @@
       "path": "README.md",
       "accessCount": 5,
       "lastAccessed": 1783695759228,
+      "type": "file"
+    },
+    {
+      "path": "Sources/MobiusCore/MobiusEnvironment.swift",
+      "accessCount": 5,
+      "lastAccessed": 1783703006425,
       "type": "file"
     },
     {
@@ -181,12 +187,6 @@
       "type": "file"
     },
     {
-      "path": "Sources/MobiusCore/MobiusEnvironment.swift",
-      "accessCount": 3,
-      "lastAccessed": 1783694901992,
-      "type": "file"
-    },
-    {
       "path": "docs/superpowers/specs/2026-07-10-mobius-design.md",
       "accessCount": 2,
       "lastAccessed": 1783694852355,
@@ -220,6 +220,12 @@
       "path": "Scripts/setup-signing.sh",
       "accessCount": 2,
       "lastAccessed": 1783702123431,
+      "type": "file"
+    },
+    {
+      "path": "Tests/MobiusCoreTests/SwitcherTests.swift",
+      "accessCount": 2,
+      "lastAccessed": 1783703382823,
       "type": "file"
     },
     {

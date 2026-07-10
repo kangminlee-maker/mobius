@@ -84,18 +84,39 @@ public final class AccountStore: @unchecked Sendable {
             .capitalized
     }
 
-    // MARK: 비밀 스냅샷 (앱 Keychain)
+    // MARK: 비밀 스냅샷 (0700 파일 — Claude Code의 .credentials.json과 동일 보안 수준)
 
     public func secret(for id: UUID) throws -> CredentialsSnapshot? {
-        guard let data = try keychain.read(service: Self.secretService(for: id),
-                                           account: Self.secretAccount) else { return nil }
-        return try JSONDecoder().decode(CredentialsSnapshot.self, from: data)
+        // 1순위: 파일. 승인창 없음.
+        if let data = try? Data(contentsOf: env.secretFile(for: id)) {
+            return try JSONDecoder().decode(CredentialsSnapshot.self, from: data)
+        }
+        // 2순위: 구버전 Keychain 항목 → 발견 시 파일로 이관하고 Keychain 항목 제거
+        //        (한 번만 승인창이 뜨고, 이후로는 파일에서 읽어 다시 뜨지 않는다).
+        if let data = ((try? keychain.read(service: Self.secretService(for: id),
+                                           account: Self.secretAccount)) ?? nil) {
+            let snap = try JSONDecoder().decode(CredentialsSnapshot.self, from: data)
+            try? writeSecretFile(snap, for: id)
+            try? keychain.delete(service: Self.secretService(for: id),
+                                 account: Self.secretAccount)
+            return snap
+        }
+        return nil
     }
 
     public func setSecret(_ snapshot: CredentialsSnapshot, for id: UUID) throws {
+        try writeSecretFile(snapshot, for: id)
+        // 혹시 남아 있을 수 있는 구버전 Keychain 항목은 정리 (승인창 재발 방지)
+        try? keychain.delete(service: Self.secretService(for: id), account: Self.secretAccount)
+    }
+
+    private func writeSecretFile(_ snapshot: CredentialsSnapshot, for id: UUID) throws {
         let data = try JSONEncoder().encode(snapshot)
-        try keychain.write(service: Self.secretService(for: id),
-                           account: Self.secretAccount, data: data)
+        try FileManager.default.createDirectory(at: env.secretsDir,
+            withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        let url = env.secretFile(for: id)
+        try data.write(to: url, options: .atomic)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
     }
 
     // MARK: 상태 변경
@@ -157,7 +178,8 @@ public final class AccountStore: @unchecked Sendable {
         }
         file.accounts.removeAll { $0.id == id }
         if file.activeAccountID == id { file.activeAccountID = file.accounts.first?.id }
-        try keychain.delete(service: Self.secretService(for: id), account: Self.secretAccount)
+        try? FileManager.default.removeItem(at: env.secretFile(for: id))
+        try? keychain.delete(service: Self.secretService(for: id), account: Self.secretAccount)
         try save()
     }
 

@@ -58,6 +58,8 @@ final class LoginFlowController: NSObject, ASWebAuthenticationPresentationContex
             // 피하기 위해 1초 뒤 재확인한다. (변경이 감지된 이상 취소 신호는 무시 —
             // 로그인은 이미 완료됐고 등록·복원을 끝까지 수행하는 것이 옳다.)
             try await Task.sleep(for: .seconds(1))
+            // 토큰/이메일 파일이 아직 갱신 중이면(불일치 위험) 다음 루프에서 다시 확인
+            guard io.liveIsStable() else { continue }
             guard let snap = try? io.readLiveSnapshot(),
                   snap.keychainBlob != previous?.keychainBlob,
                   let email = try? io.liveEmail() else { continue }

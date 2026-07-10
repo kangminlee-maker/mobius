@@ -11,16 +11,23 @@ public final class Switcher: @unchecked Sendable {
     let keychain: KeychainClient
     let store: AccountStore
     let io: ClaudeConfigIO
+    /// 토큰/이메일 파일이 이 시간 내에 수정됐으면 저장 계열 연산을 미룬다(불일치 방지).
+    /// 테스트는 파일을 막 쓰고 즉시 검증하므로 0으로 설정한다.
+    public var stabilityWindow: TimeInterval = 2
 
     public init(env: MobiusEnvironment, keychain: KeychainClient,
                 store: AccountStore, io: ClaudeConfigIO) {
         self.env = env; self.keychain = keychain; self.store = store; self.io = io
     }
 
+    private var liveStable: Bool { io.liveIsStable(window: stabilityWindow) }
+
     /// 현재 라이브 상태를, email이 일치하는 프로필에 되저장한다.
     /// 반환: 되저장된 프로필 id (일치 프로필 없으면 nil).
     @discardableResult
     public func resaveLiveIntoMatchingProfile() throws -> UUID? {
+        // 토큰/이메일 두 파일이 갱신 중이면(=불일치 위험) 저장하지 않는다.
+        guard liveStable else { return nil }
         guard let live = try io.readLiveSnapshot(),
               let email = try io.liveEmail(),
               let profile = store.file.accounts.first(where: { $0.emailAddress == email })
@@ -54,6 +61,7 @@ public final class Switcher: @unchecked Sendable {
     /// 반환: 새로 흡수한 프로필(있으면). 로그인 상태가 아니거나 이미 등록됐으면 nil.
     @discardableResult
     public func adoptLiveAccountIfUnregistered() throws -> AccountProfile? {
+        guard liveStable else { return nil }
         guard let email = try io.liveEmail(),
               let live = try io.readLiveSnapshot(),
               !store.file.accounts.contains(where: { $0.emailAddress == email })
@@ -67,6 +75,7 @@ public final class Switcher: @unchecked Sendable {
     /// 외부(앱 밖) 재로그인 감지 시 상태 대사: 라이브 email이 아는 프로필이면
     /// 그 프로필을 활성으로 표시하고 최신 토큰을 흡수한다. 모르는 계정이면 손대지 않는다.
     public func reconcile() throws {
+        guard liveStable else { return }
         guard let email = try io.liveEmail(),
               let profile = store.file.accounts.first(where: { $0.emailAddress == email })
         else { return }

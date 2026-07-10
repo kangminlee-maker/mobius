@@ -22,6 +22,7 @@ final class SwitcherTests: XCTestCase {
         store = try AccountStore(env: env, keychain: kc)
         io = ClaudeConfigIO(env: env, keychain: kc)
         switcher = Switcher(env: env, keychain: kc, store: store, io: io)
+        switcher.stabilityWindow = 0 // 테스트는 파일을 막 쓰고 즉시 검증하므로 가드 비활성
         personal = try store.upsertProfile(nickname: "personal", snapshot: snap(email: "p@x.com", tok: "P0"))
         work = try store.upsertProfile(nickname: "work", snapshot: snap(email: "w@x.com", tok: "W0"))
         try io.writeLiveSnapshot(snap(email: "p@x.com", tok: "P0")) // 현재 personal 로그인 상태
