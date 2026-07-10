@@ -18,6 +18,19 @@ struct SettingsView: View {
 
     private var settingsForm: some View {
         Form {
+            if state.file.accounts.isEmpty {
+                Section {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("아직 등록된 계정이 없어요", systemImage: "infinity")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("메뉴바의 ∞ 아이콘을 클릭하고 **계정 추가**를 눌러 Claude 계정을 등록하세요. 개인·회사 계정을 함께 등록해 두면, 한 계정의 사용량이 차는 순간 다음 계정으로 알아서 전환됩니다.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
             Section("일반") {
                 Toggle("로그인 시 자동 시작", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, on in
@@ -52,7 +65,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 380, height: 340)
+        .frame(width: 380, height: state.file.accounts.isEmpty ? 430 : 340)
     }
 
     private func installCLI() {

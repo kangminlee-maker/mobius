@@ -89,6 +89,7 @@ final class AppState: ObservableObject {
         // 사용자가 로그인 중인 창을 죽이고 감시 신호를 오염시킨다.
         guard loginFlow == nil, desktopCapture == nil else { return }
         let now = Date()
+        try? switcher.adoptLiveAccountIfUnregistered()
         try? switcher.reconcile()
 
         // 배치 내 모든 hit는 스캔 시점의 활성 계정에 귀속 —

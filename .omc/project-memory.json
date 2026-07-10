@@ -56,8 +56,14 @@
   "hotPaths": [
     {
       "path": "Sources/MobiusApp/AppState.swift",
-      "accessCount": 22,
-      "lastAccessed": 1783695707943,
+      "accessCount": 24,
+      "lastAccessed": 1783700783689,
+      "type": "file"
+    },
+    {
+      "path": "Sources/MobiusApp/Views/SettingsView.swift",
+      "accessCount": 15,
+      "lastAccessed": 1783700838273,
       "type": "file"
     },
     {
@@ -67,21 +73,21 @@
       "type": "file"
     },
     {
-      "path": "Sources/MobiusApp/Views/SettingsView.swift",
-      "accessCount": 11,
-      "lastAccessed": 1783700628219,
-      "type": "file"
-    },
-    {
       "path": "Sources/MobiusApp/Views/AccountListView.swift",
-      "accessCount": 9,
-      "lastAccessed": 1783700629869,
+      "accessCount": 10,
+      "lastAccessed": 1783700789817,
       "type": "file"
     },
     {
       "path": "Scripts/make-app.sh",
       "accessCount": 7,
       "lastAccessed": 1783699740114,
+      "type": "file"
+    },
+    {
+      "path": "Sources/MobiusCore/Switcher.swift",
+      "accessCount": 7,
+      "lastAccessed": 1783700778800,
       "type": "file"
     },
     {
@@ -106,12 +112,6 @@
       "path": "Sources/MobiusCore/DesktopSwitcher.swift",
       "accessCount": 5,
       "lastAccessed": 1783694908875,
-      "type": "file"
-    },
-    {
-      "path": "Sources/MobiusCore/Switcher.swift",
-      "accessCount": 5,
-      "lastAccessed": 1783695692496,
       "type": "file"
     },
     {

@@ -49,6 +49,21 @@ public final class Switcher: @unchecked Sendable {
         try store.setActive(id)
     }
 
+    /// 현재 claude에 로그인된 계정이 아직 프로필로 등록되지 않았다면 자동 흡수한다.
+    /// 앱 최초 실행 시 "등록된 계정 없음" 대신 사용 중인 계정이 바로 뜨도록 하는 부트스트랩.
+    /// 반환: 새로 흡수한 프로필(있으면). 로그인 상태가 아니거나 이미 등록됐으면 nil.
+    @discardableResult
+    public func adoptLiveAccountIfUnregistered() throws -> AccountProfile? {
+        guard let email = try io.liveEmail(),
+              let live = try io.readLiveSnapshot(),
+              !store.file.accounts.contains(where: { $0.emailAddress == email })
+        else { return nil }
+        let nickname = String(email.split(separator: "@").first ?? "account")
+        let profile = try store.upsertProfile(nickname: nickname, snapshot: live)
+        try store.setActive(profile.id)
+        return profile
+    }
+
     /// 외부(앱 밖) 재로그인 감지 시 상태 대사: 라이브 email이 아는 프로필이면
     /// 그 프로필을 활성으로 표시하고 최신 토큰을 흡수한다. 모르는 계정이면 손대지 않는다.
     public func reconcile() throws {
