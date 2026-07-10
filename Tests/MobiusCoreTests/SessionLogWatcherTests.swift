@@ -24,10 +24,12 @@ final class SessionLogWatcherTests: XCTestCase {
         #"{"type":"assistant","error":"rate_limit","isApiErrorMessage":true,"apiErrorStatus":429,"message":{"model":"<synthetic>","role":"assistant","content":[{"type":"text","text":"\#(text)"}]}}"#
     }
 
-    func append(_ line: String) throws {
+    func append(_ line: String) throws { try appendRaw(line + "\n") }
+
+    func appendRaw(_ text: String) throws {
         let handle = try FileHandle(forWritingTo: log)
         handle.seekToEndOfFile()
-        handle.write(Data((line + "\n").utf8))
+        handle.write(Data(text.utf8))
         try handle.close()
     }
 
@@ -68,5 +70,43 @@ final class SessionLogWatcherTests: XCTestCase {
         let hits = watcher.scan(now: now)
         XCTAssertEqual(hits.count, 1)
         XCTAssertNil(hits[0].resetsAt)
+    }
+
+    func testPartialLineIsNotLostAcrossScans() throws {
+        let now = Date()
+        let epoch = Int(now.addingTimeInterval(3600).timeIntervalSince1970)
+        try "".write(to: log, atomically: true, encoding: .utf8)
+        let watcher = SessionLogWatcher(env: env)
+        XCTAssertTrue(watcher.scan(now: now).isEmpty) // 프라이밍
+
+        let full = legacyHitLine(epoch: epoch)
+        let mid = full.index(full.startIndex, offsetBy: full.count / 2)
+        // ① 개행 없는 부분 라인만 도착 (쓰기 도중 스캔) → 히트 0, 오프셋 전진 없어야 함
+        try appendRaw(String(full[..<mid]))
+        XCTAssertTrue(watcher.scan(now: now).isEmpty)
+        // ② 나머지 + 개행 도착 → 분할된 이벤트가 온전한 한 줄로 파싱됨
+        try appendRaw(String(full[mid...]) + "\n")
+        let hits = watcher.scan(now: now)
+        XCTAssertEqual(hits.count, 1)
+        XCTAssertEqual(hits[0].resetsAt, Date(timeIntervalSince1970: TimeInterval(epoch)))
+    }
+
+    func testPartialLineAtPrimingIsCompletedLater() throws {
+        let now = Date()
+        let epoch = Int(now.addingTimeInterval(3600).timeIntervalSince1970)
+        let full = legacyHitLine(epoch: epoch)
+        let mid = full.index(full.startIndex, offsetBy: full.count / 2)
+        // 프라이밍 시점: 완성된 옛 라인(무시 대상) + 쓰기 도중인 부분 라인
+        try (legacyHitLine(epoch: epoch) + "\n" + String(full[..<mid]))
+            .write(to: log, atomically: true, encoding: .utf8)
+
+        let watcher = SessionLogWatcher(env: env)
+        XCTAssertTrue(watcher.scan(now: now).isEmpty) // 첫 스캔: 마지막 개행까지만 오프셋 기록
+
+        // 부분 라인의 나머지가 완성되면 그 라인은 파싱되어야 함
+        try appendRaw(String(full[mid...]) + "\n")
+        let hits = watcher.scan(now: now)
+        XCTAssertEqual(hits.count, 1)
+        XCTAssertEqual(hits[0].resetsAt, Date(timeIntervalSince1970: TimeInterval(epoch)))
     }
 }
