@@ -22,7 +22,6 @@ final class SwitcherTests: XCTestCase {
         store = try AccountStore(env: env, keychain: kc)
         io = ClaudeConfigIO(env: env, keychain: kc)
         switcher = Switcher(env: env, keychain: kc, store: store, io: io)
-        switcher.stabilityWindow = 0 // 테스트는 파일을 막 쓰고 즉시 검증하므로 가드 비활성
         personal = try store.upsertProfile(nickname: "personal", snapshot: snap(email: "p@x.com", tok: "P0"))
         work = try store.upsertProfile(nickname: "work", snapshot: snap(email: "w@x.com", tok: "W0"))
         try io.writeLiveSnapshot(snap(email: "p@x.com", tok: "P0")) // 현재 personal 로그인 상태
@@ -62,19 +61,19 @@ final class SwitcherTests: XCTestCase {
         }
     }
 
-    func testReconcileDetectsExternalLogin() throws {
+    func testReconcileDetectsExternalLogin() async throws {
         // 사용자가 앱 밖에서 work로 직접 재로그인한 상황
         try io.writeLiveSnapshot(snap(email: "w@x.com", tok: "W-ext"))
-        try switcher.reconcile()
+        try await switcher.reconcile()
         XCTAssertEqual(store.file.activeAccountID, work.id)
         // 외부 로그인으로 생긴 최신 토큰이 프로필에 흡수됨
         XCTAssertEqual(try store.secret(for: work.id)?.keychainBlob,
                        Data(#"{"tok":"W-ext"}"#.utf8))
     }
 
-    func testReconcileUnknownEmailDoesNothing() throws {
+    func testReconcileUnknownEmailDoesNothing() async throws {
         try io.writeLiveSnapshot(snap(email: "stranger@x.com", tok: "S"))
-        try switcher.reconcile()
+        try await switcher.reconcile()
         XCTAssertEqual(store.file.activeAccountID, personal.id) // 그대로
     }
 }

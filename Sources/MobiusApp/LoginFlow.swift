@@ -51,10 +51,9 @@ final class LoginFlowController: NSObject, ASWebAuthenticationPresentationContex
             if !(process?.isRunning ?? true) { session?.cancel(); session = nil }
 
             // (a) 완료 감지를 취소 판단보다 먼저 — 로그인이 실제로 됐으면 취소로 오판하지 않는다.
-            if io.liveIsStable(),
-               let snap = try? io.readLiveSnapshot(),
-               snap.keychainBlob != previous?.keychainBlob,
-               let email = try? io.liveEmail() {
+            //     토큰+이메일을 두 번 읽어 일치할 때만(전환 중 불일치 배제) 등록한다.
+            if let (snap, email) = await io.readStableLiveSnapshot(),
+               snap.keychainBlob != previous?.keychainBlob {
                 session?.cancel(); session = nil   // 창 닫기
 
                 let nickname = store.file.accounts

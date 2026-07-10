@@ -51,20 +51,20 @@ public struct ClaudeConfigIO: Sendable {
         try readOAuthAccountDict()?["emailAddress"] as? String
     }
 
-    /// 라이브 상태가 안정적인지 — 즉 Claude Code가 토큰 파일(.credentials.json)과
-    /// 이메일 파일(~/.claude.json)을 "지금 갱신 중"이 아닌지 판별한다.
+    /// 라이브 상태(토큰+이메일)를 간격을 두고 두 번 읽어 **값이 일치할 때만** 반환한다.
+    /// 로그인/전환 도중 토큰(Keychain)과 이메일(~/.claude.json)이 순차 갱신되는 찰나엔
+    /// 두 읽기가 달라지므로 nil을 반환해 "새 토큰 + 옛 이메일" 오저장을 막는다.
     ///
-    /// 두 파일에는 공통 계정 식별자가 없어(토큰 파일엔 email 없음, email 파일엔 token 없음)
-    /// 로그인/전환으로 둘이 순차 갱신되는 찰나에 읽으면 "새 토큰 + 옛 이메일"이 섞여
-    /// 프로필에 잘못 저장될 수 있다. 두 파일 모두 최근 `window`초 내 수정이 없을 때만
-    /// 일관적이라고 보고, 저장 계열 연산(resave/adopt/reconcile)을 이때만 수행한다.
-    public func liveIsStable(now: Date = Date(), window: TimeInterval = 2) -> Bool {
-        for url in [env.credentialsFile, env.claudeJSON] {
-            guard let m = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
-                .contentModificationDate else { continue }
-            if now.timeIntervalSince(m) < window { return false }
-        }
-        return true
+    /// 파일 mtime 기반 판정은 부적합하다 — 활성 claude 세션이 ~/.claude.json을 자주 쓰므로
+    /// "N초간 idle" 조건이 영영 충족되지 않아 로그인 완료 감지가 막힌다(실측 버그). 그래서
+    /// 파일이 바쁜지와 무관하게 값 자체를 두 번 비교한다.
+    public func readStableLiveSnapshot(gap: Duration = .milliseconds(700))
+        async -> (snapshot: CredentialsSnapshot, email: String)? {
+        guard let s1 = try? readLiveSnapshot(), let e1 = try? liveEmail() else { return nil }
+        try? await Task.sleep(for: gap)
+        guard let s2 = try? readLiveSnapshot(), let e2 = try? liveEmail() else { return nil }
+        guard s1.keychainBlob == s2.keychainBlob, e1 == e2 else { return nil }
+        return (s2, e2)
     }
 
     // MARK: 쓰기

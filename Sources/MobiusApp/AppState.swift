@@ -56,9 +56,9 @@ final class AppState: ObservableObject {
 
         // 15초 주기: 로그 스캔 → 자동 전환 판단 → reconcile
         timer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.tick() }
+            Task { @MainActor in await self?.tick() }
         }
-        tick()
+        Task { @MainActor in await tick() }
     }
 
     deinit {
@@ -107,15 +107,15 @@ final class AppState: ObservableObject {
 
     // MARK: 주기 처리
 
-    func tick() {
+    func tick() async {
         // 로그인 창이 열려 있는 동안은 reconcile/자동 전환이 LoginFlow의
         // 자격증명 변경 감지와 경합하지 않도록 전체를 건너뛴다.
         // Desktop 가이드 캡처 중에도 동일 — 자동 전환이 Desktop을 재실행하면
         // 사용자가 로그인 중인 창을 죽이고 감시 신호를 오염시킨다.
         guard loginFlow == nil, desktopCapture == nil else { return }
         let now = Date()
-        try? switcher.adoptLiveAccountIfUnregistered()
-        try? switcher.reconcile()
+        try? await switcher.adoptLiveAccountIfUnregistered()
+        try? await switcher.reconcile()
 
         // 배치 내 모든 hit는 스캔 시점의 활성 계정에 귀속 —
         // 루프 중 전환이 일어나도 남은 hit(구 세션 로그)가 새 활성 계정에 오기록되지 않도록.

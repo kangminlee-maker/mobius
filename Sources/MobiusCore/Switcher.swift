@@ -11,23 +11,17 @@ public final class Switcher: @unchecked Sendable {
     let keychain: KeychainClient
     let store: AccountStore
     let io: ClaudeConfigIO
-    /// 토큰/이메일 파일이 이 시간 내에 수정됐으면 저장 계열 연산을 미룬다(불일치 방지).
-    /// 테스트는 파일을 막 쓰고 즉시 검증하므로 0으로 설정한다.
-    public var stabilityWindow: TimeInterval = 2
 
     public init(env: MobiusEnvironment, keychain: KeychainClient,
                 store: AccountStore, io: ClaudeConfigIO) {
         self.env = env; self.keychain = keychain; self.store = store; self.io = io
     }
 
-    private var liveStable: Bool { io.liveIsStable(window: stabilityWindow) }
-
     /// 현재 라이브 상태를, email이 일치하는 프로필에 되저장한다.
     /// 반환: 되저장된 프로필 id (일치 프로필 없으면 nil).
+    /// 사용자 전환(switchTo) 직전에 호출 — 라이브가 settled 상태이므로 단일 읽기로 충분하다.
     @discardableResult
     public func resaveLiveIntoMatchingProfile() throws -> UUID? {
-        // 토큰/이메일 두 파일이 갱신 중이면(=불일치 위험) 저장하지 않는다.
-        guard liveStable else { return nil }
         guard let live = try io.readLiveSnapshot(),
               let email = try io.liveEmail(),
               let profile = store.file.accounts.first(where: { $0.emailAddress == email })
@@ -60,15 +54,15 @@ public final class Switcher: @unchecked Sendable {
     /// 앱 최초 실행 시 "등록된 계정 없음" 대신 사용 중인 계정이 바로 뜨도록 하는 부트스트랩.
     /// 반환: 새로 흡수한 프로필(있으면). 로그인 상태가 아니거나 이미 등록됐으면 nil.
     @discardableResult
-    public func adoptLiveAccountIfUnregistered() throws -> AccountProfile? {
-        guard liveStable else { return nil }
-        // ★ 등록 여부를 먼저 확인한다 — 이메일은 .claude.json에서 읽어 승인창이 없다.
-        //   readLiveSnapshot()(=Keychain, 승인창 유발)은 정말 미등록일 때만 호출.
-        //   (과거: guard에서 readLiveSnapshot을 먼저 평가해 매 틱 Keychain을 읽어 15초마다 승인창이 떴음)
+    public func adoptLiveAccountIfUnregistered() async throws -> AccountProfile? {
+        // ★ 등록 여부를 먼저 확인 — 이메일은 .claude.json에서 읽어 승인창이 없다.
+        //   Keychain 읽기(승인창 유발)는 정말 미등록일 때만.
         guard let email = try io.liveEmail(),
               !store.file.accounts.contains(where: { $0.emailAddress == email })
         else { return nil }
-        guard let live = try io.readLiveSnapshot() else { return nil }
+        // 토큰+이메일을 두 번 읽어 일치할 때만(전환 중 불일치 배제) 저장한다.
+        guard let (live, stableEmail) = await io.readStableLiveSnapshot(),
+              stableEmail == email else { return nil }
         let nickname = String(email.split(separator: "@").first ?? "account")
         let profile = try store.upsertProfile(nickname: nickname, snapshot: live)
         try store.setActive(profile.id)
@@ -77,8 +71,7 @@ public final class Switcher: @unchecked Sendable {
 
     /// 외부(앱 밖) 재로그인 감지 시 상태 대사: 라이브 email이 아는 프로필이면
     /// 그 프로필을 활성으로 표시하고 최신 토큰을 흡수한다. 모르는 계정이면 손대지 않는다.
-    public func reconcile() throws {
-        guard liveStable else { return }
+    public func reconcile() async throws {
         // 이메일은 .claude.json에서 읽어 승인창이 없다. 활성 계정이 그대로면
         // Keychain(토큰) 읽기를 아예 하지 않아 15초 주기 승인창 폭탄을 막는다.
         guard let email = try io.liveEmail(),
@@ -88,10 +81,10 @@ public final class Switcher: @unchecked Sendable {
         let alreadyHasSecret = (try? store.secret(for: profile.id)) != nil
         if activeUnchanged && alreadyHasSecret { return } // 정상 상태 — Keychain 접근 없음
 
-        // 여기부터는 외부 전환/최초 흡수 등 실제 변화가 있을 때만 (드묾) Keychain 1회 접근.
-        if let live = try io.readLiveSnapshot() {
-            try store.setSecret(live, for: profile.id)
-        }
+        // 실제 변화가 있을 때만(드묾) 토큰+이메일 두 번 읽어 일치 확인 후 Keychain 접근.
+        guard let (live, stableEmail) = await io.readStableLiveSnapshot(),
+              stableEmail == email else { return }
+        try store.setSecret(live, for: profile.id)
         if !activeUnchanged {
             try store.setActive(profile.id)
             // 외부(사용자) 로그인으로 활성이 바뀐 것 — 자동 전환 상태가 아니므로

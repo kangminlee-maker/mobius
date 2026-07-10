@@ -3,7 +3,7 @@ import Foundation
 import MobiusCore
 
 @main
-struct MobiusCLI: ParsableCommand {
+struct MobiusCLI: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "mobius",
         abstract: "Claude CLI 계정 매니저 (뫼비우스)",
@@ -26,11 +26,11 @@ func fmtReset(_ p: AccountProfile) -> String {
     return "  [한도 소진 — \(mins / 60)시간 \(mins % 60)분 후 리셋]"
 }
 
-struct List: ParsableCommand {
+struct List: AsyncParsableCommand {
     static let configuration = CommandConfiguration(abstract: "계정 목록")
-    func run() throws {
+    func run() async throws {
         let ctx = try makeContext()
-        try ctx.switcher.reconcile()
+        try await ctx.switcher.reconcile()
         if ctx.store.file.accounts.isEmpty {
             print("등록된 계정이 없습니다. 앱에서 '계정 추가' 또는 `mobius capture <이름>`으로 등록하세요.")
             return
@@ -63,11 +63,11 @@ struct Switch: ParsableCommand {
     }
 }
 
-struct Status: ParsableCommand {
+struct Status: AsyncParsableCommand {
     static let configuration = CommandConfiguration(abstract: "현재 상태")
-    func run() throws {
+    func run() async throws {
         let ctx = try makeContext()
-        try ctx.switcher.reconcile()
+        try await ctx.switcher.reconcile()
         guard let active = ctx.store.file.active else {
             print("활성 계정 없음 (claude 로그아웃 상태이거나 미등록 계정)")
             return
