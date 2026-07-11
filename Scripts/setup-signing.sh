@@ -16,6 +16,18 @@ fi
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
+# 인증서(키 포함)는 이미 import됐는데 신뢰 등록만 실패한 경우(비GUI 실행 등) —
+# 여기서 새 인증서를 또 만들면 같은 이름이 중복되어 codesign이 ambiguous로 실패한다
+# (2026-07-11 실제 발생). 기존 인증서로 신뢰 등록만 재시도한다.
+if security find-certificate -c "$NAME" >/dev/null 2>&1; then
+  echo "인증서는 있으나 codesign 신뢰 미등록 — 신뢰 등록만 재시도 (관리자 암호 창 1회)"
+  security find-certificate -c "$NAME" -p > "$TMP/cert.pem"
+  osascript -e "do shell script \"security add-trusted-cert -d -r trustRoot -p codeSign -k /Library/Keychains/System.keychain '$TMP/cert.pem'\" with administrator privileges"
+  echo "완료: '$NAME' 신뢰 등록"
+  security find-identity -v -p codesigning | grep "$NAME" || true
+  exit 0
+fi
+
 # 1. 코드서명 용도 자체 서명 인증서 생성
 /usr/bin/openssl req -x509 -newkey rsa:2048 -keyout "$TMP/key.pem" -out "$TMP/cert.pem" \
   -days 3650 -nodes -subj "/CN=$NAME" \

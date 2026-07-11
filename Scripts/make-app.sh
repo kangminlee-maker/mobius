@@ -30,8 +30,17 @@ PLIST
 # 고정 인증서가 있으면 그걸로 서명 (Keychain "항상 허용"이 리빌드 후에도 유지됨).
 # 없으면 ad-hoc 폴백 — Scripts/setup-signing.sh 로 인증서를 만들 수 있다.
 if security find-identity -v -p codesigning | grep -q "Mobius Dev Signing"; then
-  codesign --force -s "Mobius Dev Signing" "$APP"
+  # 서명 실패(중복 인증서로 ambiguous 등)를 조용히 지나치면 linker-signed adhoc으로
+  # 남아 전환마다 승인창이 뜬다 — 명시적으로 실패시킨다.
+  codesign --force -s "Mobius Dev Signing" "$APP" || {
+    echo "ERROR: 고정 서명 실패 — 'Mobius Dev Signing' 중복/신뢰 상태를 확인:"
+    echo "  security find-certificate -a -c 'Mobius Dev Signing' -Z ~/Library/Keychains/login.keychain-db | grep SHA-1"
+    exit 1
+  }
 else
+  echo "⚠️  'Mobius Dev Signing' 인증서 없음 → ad-hoc 서명 폴백."
+  echo "   ad-hoc은 리빌드마다 정체성이 바뀌어 Keychain '항상 허용'이 리셋된다"
+  echo "   (전환 시 승인창 2회 재발). Scripts/setup-signing.sh 를 1회 실행할 것."
   codesign --force -s - "$APP"
 fi
 echo "OK: $APP (open $APP 으로 실행)"

@@ -60,6 +60,17 @@ Sources/MobiusApp/        SwiftUI 메뉴바 앱 + AppState + Views/ + LoginFlow 
 - `Scripts/setup-signing.sh`로 고정 인증서 `Mobius Dev Signing` 생성 → make-app.sh가 자동 사용.
 - 고정 서명 + 아래 '비밀은 파일' 조합으로 승인창이 사실상 사라짐.
 
+### Desktop 내장 Claude Code가 `security` CLI로 CLI 자격증명을 읽는다 (파티션 리스트)
+- 최근 Claude Desktop은 Claude Code를 내장(`claude-code`, `cowork-enabled-cli-ops.json`)하며,
+  **Desktop 실행 시 `/usr/bin/security`로 Keychain `Claude Code-credentials`를 읽는다.**
+- 이 항목의 **파티션 리스트에 `apple-tool:`이 없으면** security 접근마다 **키체인 암호를
+  요구하는 창**이 뜨고, 이 유형은 **'항상 허용'을 눌러도 절대 저장되지 않는다**
+  (파티션 검사는 ACL과 별개). Desktop을 재실행할 때마다 2회씩 반복 (2026-07-11 실측).
+- 1회 해결: `security set-generic-password-partition-list -S "apple-tool:,apple:"
+  -s "Claude Code-credentials" -a $USER` (로그인 키체인 암호 필요. "(deprecated)" 문구는
+  대화형 암호 입력 방식에 대한 경고일 뿐 — 이 명령이 파티션 수정의 유일한 수단).
+- 주의: CLI 재로그인 등으로 항목이 **재생성되면 파티션이 리셋**되어 재적용 필요.
+
 ### Claude Desktop은 Squirrel(ShipIt) 자동업데이트 — 앱 종료 순간 번들 통째 교체
 - 업데이트가 스테이징되어 있으면 **Desktop이 종료되는 순간** ShipIt이
   `/Applications/Claude.app`을 temp로 이동시키고 새 번들로 교체한다
@@ -124,6 +135,16 @@ Sources/MobiusApp/        SwiftUI 메뉴바 앱 + AppState + Views/ + LoginFlow 
     → `launch()` 전에 ShipIt 대기 + `/Applications` 밖 번들 실행 금지. **회복은 재설치가
     아니라 Desktop 완전 종료 후 재실행이면 충분** — 승인창 원인을 키체인 항목/ACL 오염으로
     오귀인하지 말 것 (Mobius는 `Claude Safe Storage`를 아예 안 건드린다).
+
+11. **"키체인 승인창" 하나에 원인이 3중으로 겹쳐 있었음 — 창의 요청자·문구부터 볼 것** —
+    (a) Desktop 실행 시: `security`發 암호형 창 = 파티션 리스트 문제(핵심 사실 참조),
+    (b) 계정 전환 시 2회/추가 시 3회: Mobius發 = **make-app.sh가 인증서 없음/서명 실패 시
+    조용히 ad-hoc으로 남아** 리빌드마다 승인 리셋, (c) ShipIt 레이스(실패 기록 10).
+    같은 "승인창"이라도 **요청 앱 이름과 창 유형(버튼형 vs 암호형)이 다르면 원인이 다르다.**
+    파생 함정: setup-signing.sh가 비GUI 컨텍스트에서 osascript(관리자 권한) 실패 →
+    재실행하면 같은 이름 인증서가 **중복 생성**되어 codesign이 ambiguous로 실패하는데,
+    make-app.sh가 이를 무시하고 linker-signed adhoc으로 통과시켰다. → 두 스크립트 모두
+    가드 추가(중복 시 신뢰 등록만 재시도 / 서명 실패 시 명시적 exit 1).
 
 ## QA / 진행 상황
 
