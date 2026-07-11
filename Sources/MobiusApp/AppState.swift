@@ -214,10 +214,52 @@ final class AppState: ObservableObject {
             lastError = "Desktop 전환이 진행 중입니다 — 이번 전환에서는 Desktop을 건너뜁니다."
             return
         }
+        let targetUncaptured = !desktopSwitcher.hasSnapshot(for: id)
         desktopSwitchTask = Task { @MainActor in
             defer { desktopSwitchTask = nil }
             do { try await desktopCoordinator.switchDesktop(from: fromID, to: id) }
-            catch { lastError = "Desktop 전환 실패(CLI는 전환됨): \(error.localizedDescription)" }
+            catch { lastError = "Desktop 전환 실패(CLI는 전환됨): \(error.localizedDescription)"; return }
+            // 미캡처 계정으로 전환 = Desktop 로그아웃됨. 이제 사용자가 Desktop에 로그인하면
+            // 그 세션을 자동으로 캡처해 다음부터는 전환만으로 복원되게 한다.
+            if targetUncaptured { startDesktopAutoCapture(for: id) }
+        }
+    }
+
+    private var desktopAutoCaptureTask: Task<Void, Never>?
+
+    /// 미캡처 계정으로 전환해 Desktop이 로그아웃된 뒤, 사용자가 그 계정으로 로그인하면
+    /// 자동으로 캡처한다. (로그아웃 확인 → 새 로그인 전이로만 발동, 5분 후 포기.)
+    private func startDesktopAutoCapture(for id: UUID) {
+        desktopAutoCaptureTask?.cancel()
+        desktopAutoCaptureTask = Task { @MainActor in
+            defer { desktopAutoCaptureTask = nil }
+            var confirmedLoggedOut = false
+            var loginSeenAt: Date?
+            let deadline = Date().addingTimeInterval(300)
+            while Date() < deadline {
+                do { try await Task.sleep(for: .seconds(2)) } catch { return }
+                // 그 사이 계정을 바꿨거나 가이드 캡처가 시작되면 중단
+                guard store.file.activeAccountID == id, desktopCapture == nil else { return }
+                let loggedIn = desktopSwitcher.hasLiveLogin()
+                if !confirmedLoggedOut {
+                    if !loggedIn { confirmedLoggedOut = true }
+                    continue // 아직 로그인 상태면 자동캡처 안 함(오캡처 방지)
+                }
+                guard loggedIn else { loginSeenAt = nil; continue }
+                if loginSeenAt == nil { loginSeenAt = Date() }
+                else if Date().timeIntervalSince(loginSeenAt!) >= 2 { // 토큰 기록 완료 대기
+                    do {
+                        try desktopSwitcher.capture(for: id)
+                        try store.update(id) { $0.hasDesktopSnapshot = true }
+                        MobiusNotification.postAccountsChanged()
+                        reload()
+                        let name = store.file.accounts.first { $0.id == id }?.nickname ?? "?"
+                        notify(title: "Claude Desktop 자동 연결됨",
+                               body: "\(name) 계정의 Desktop 세션을 저장했어요. 이제 전환하면 자동으로 이어집니다.")
+                    } catch { lastError = "Desktop 자동 캡처 실패: \(error.localizedDescription)" }
+                    return
+                }
+            }
         }
     }
 
