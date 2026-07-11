@@ -65,17 +65,10 @@ final class DesktopCoordinator {
         isSwitching = true
         defer { isSwitching = false }
 
-        let wasRunning = runningApp != nil
-
-        if let app = runningApp {
-            app.terminate()
-            for _ in 0..<50 { // 최대 10초 대기
-                try await Task.sleep(for: .milliseconds(200))
-                if app.isTerminated { break }
-            }
-            if !app.isTerminated { app.forceTerminate() }
-            try await Task.sleep(for: .milliseconds(500)) // 파일 핸들 정리 여유
-        }
+        let wasRunning = isRunning
+        // ★ 연결(capture)과 동일한 '완전 종료'를 사용한다 — 예전 인라인 종료는 헬퍼가 남아
+        //   config.json/신원 파일을 붙잡은 채라 restore가 반영 안 돼 이전 계정으로 되살아났다.
+        await terminateAndWait()
 
         // 스왑이 실패해도 원래 켜져 있었으면 반드시 재실행한다 (사용자를 앱 없는 상태로 방치 금지)
         var swapError: Error?
@@ -88,14 +81,7 @@ final class DesktopCoordinator {
             swapError = error
         }
 
-        if wasRunning {
-            let url = NSWorkspace.shared.urlForApplication(
-                withBundleIdentifier: Self.bundleID)
-            if let url {
-                _ = try? await NSWorkspace.shared.openApplication(
-                    at: url, configuration: NSWorkspace.OpenConfiguration())
-            }
-        }
+        if wasRunning { await launch() }
         if let swapError { throw swapError }
     }
 }
