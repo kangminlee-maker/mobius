@@ -70,7 +70,9 @@ final class DesktopCoordinator {
         // 스왑이 실패해도 원래 켜져 있었으면 반드시 재실행한다 (사용자를 앱 없는 상태로 방치 금지)
         var swapError: Error?
         do {
-            try switcher.capture(for: from)   // 현재 상태 되저장
+            // from은 '이미 연결(스냅샷)된 계정'일 때만 되저장한다 —
+            // 스냅샷 없는 계정은 사용자가 명시적으로 연결한 적이 없으므로 자동 생성하지 않는다.
+            if switcher.hasSnapshot(for: from) { try switcher.capture(for: from) }
             try switcher.restore(for: to)
         } catch {
             swapError = error
