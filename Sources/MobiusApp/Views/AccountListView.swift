@@ -116,7 +116,12 @@ struct AccountListView: View {
                         usage: usageFor(p), now: now,
                         onConnectDesktop: state.desktopSwitcher.isDesktopInstalled
                             ? { state.beginDesktopCapture(for: p.id) } : nil,
-                        onDelete: { state.removeAccount(p.id) })
+                        onDelete: { state.removeAccount(p.id) },
+                        onSetPrimary: isPrimary ? nil : {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                state.setPrimary(p.id)
+                            }
+                        })
             .matchedGeometryEffect(id: p.id, in: cardSpace)
             .onTapGesture {
                 guard p.id != state.file.activeAccountID else { return }

@@ -11,6 +11,8 @@ struct AccountCardView: View {
     /// Desktop 설치 시에만 전달 — 눈에 보이는 ⋯ 메뉴에 "Claude Desktop 연결" 노출
     var onConnectDesktop: (() -> Void)? = nil
     var onDelete: (() -> Void)? = nil
+    /// fallback 카드에만 전달 — ⋯ 메뉴/우클릭에서 primary로 승격
+    var onSetPrimary: (() -> Void)? = nil
 
     private let accent = Color(red: 0.35, green: 0.65, blue: 1.0)
 
@@ -57,8 +59,11 @@ struct AccountCardView: View {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(accent).font(.system(size: 16))
             }
-            if onConnectDesktop != nil || onDelete != nil {
+            if onConnectDesktop != nil || onDelete != nil || onSetPrimary != nil {
                 Menu {
+                    if let onSetPrimary {
+                        Button("Primary 계정으로 설정", systemImage: "star") { onSetPrimary() }
+                    }
                     if let onConnectDesktop {
                         // Desktop 연결은 이 계정이 '현재 활성'일 때만 — 캡처는 활성 세션을
                         // 잡으므로, 비활성 계정에서 연결하면 엉뚱한 계정이 저장된다.
