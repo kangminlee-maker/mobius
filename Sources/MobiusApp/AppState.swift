@@ -37,7 +37,7 @@ final class AppState: ObservableObject {
             store = try AccountStore(env: env, keychain: kc)
         } catch {
             store = AccountStore(env: env, keychain: kc, file: AccountsFile())
-            initError = "계정 목록 로드 실패: \(error.localizedDescription)"
+            initError = loc("계정 목록 로드 실패: %@", error.localizedDescription)
         }
         self.store = store
         self.io = ClaudeConfigIO(env: env, keychain: kc)
@@ -147,12 +147,12 @@ final class AppState: ObservableObject {
         switch decision {
         case .none: break
         case .allExhausted:
-            notify(title: "모든 계정 한도 소진",
-                   body: "전환 가능한 계정이 없습니다. 리셋을 기다려주세요.")
+            notify(title: loc("모든 계정 한도 소진"),
+                   body: loc("전환 가능한 계정이 없습니다. 리셋을 기다려주세요."))
         case let .notifyExhaustedOnly(id):
             let name = store.file.accounts.first { $0.id == id }?.nickname ?? "?"
-            notify(title: "한도 소진 — 자동 전환이 꺼져 있습니다",
-                   body: "\(name) 계정이 한도에 도달했습니다. 수동으로 전환하세요.")
+            notify(title: loc("한도 소진 — 자동 전환이 꺼져 있습니다"),
+                   body: loc("%@ 계정이 한도에 도달했습니다. 수동으로 전환하세요.", name))
         case let .switchTo(id, reason):
             let fromID = store.file.activeAccountID
             do {
@@ -164,10 +164,10 @@ final class AppState: ObservableObject {
                 MobiusNotification.postAccountsChanged()
                 let name = store.file.accounts.first { $0.id == id }?.nickname ?? "?"
                 let title = reason == .primaryRecovered
-                    ? "Primary 계정으로 복귀" : "Fallback 계정으로 전환"
-                notify(title: title, body: "활성 계정: \(name)")
+                    ? loc("Primary 계정으로 복귀") : loc("Fallback 계정으로 전환")
+                notify(title: title, body: loc("활성 계정: %@", name))
             } catch {
-                lastError = "자동 전환 실패: \(error.localizedDescription)"
+                lastError = loc("자동 전환 실패: %@", error.localizedDescription)
                 return
             }
             // Desktop 자동 Fallback: 옵션 켬 + 대상 스냅샷 존재 시에만
@@ -189,7 +189,7 @@ final class AppState: ObservableObject {
             MobiusNotification.postAccountsChanged()
             reload()
         } catch {
-            lastError = "전환 실패: \(error.localizedDescription)"
+            lastError = loc("전환 실패: %@", error.localizedDescription)
             return
         }
         // Desktop 동시 전환 (옵션 켜짐 + 대상 스냅샷 존재 시)
@@ -211,14 +211,14 @@ final class AppState: ObservableObject {
         // 직렬화 게이트: 이전 Desktop 전환이 진행 중이면 이번 요청은 드롭 —
         // 연속 전환(A→B, B→C)이 겹치며 스냅샷이 교차 오염되는 것을 방지 (코디네이터도 재차 차단).
         guard desktopSwitchTask == nil else {
-            lastError = "Desktop 전환이 진행 중입니다 — 이번 전환에서는 Desktop을 건너뜁니다."
+            lastError = loc("Desktop 전환이 진행 중입니다 — 이번 전환에서는 Desktop을 건너뜁니다.")
             return
         }
         let targetUncaptured = !desktopSwitcher.hasSnapshot(for: id)
         desktopSwitchTask = Task { @MainActor in
             defer { desktopSwitchTask = nil }
             do { try await desktopCoordinator.switchDesktop(from: fromID, to: id) }
-            catch { lastError = "Desktop 전환 실패(CLI는 전환됨): \(error.localizedDescription)"; return }
+            catch { lastError = loc("Desktop 전환 실패(CLI는 전환됨): %@", error.localizedDescription); return }
             // 미캡처 계정으로 전환 = Desktop 로그아웃됨. 이제 사용자가 Desktop에 로그인하면
             // 그 세션을 자동으로 캡처해 다음부터는 전환만으로 복원되게 한다.
             if targetUncaptured { startDesktopAutoCapture(for: id) }
@@ -254,9 +254,9 @@ final class AppState: ObservableObject {
                         MobiusNotification.postAccountsChanged()
                         reload()
                         let name = store.file.accounts.first { $0.id == id }?.nickname ?? "?"
-                        notify(title: "Claude Desktop 자동 연결됨",
-                               body: "\(name) 계정의 Desktop 세션을 저장했어요. 이제 전환하면 자동으로 이어집니다.")
-                    } catch { lastError = "Desktop 자동 캡처 실패: \(error.localizedDescription)" }
+                        notify(title: loc("Claude Desktop 자동 연결됨"),
+                               body: loc("%@ 계정의 Desktop 세션을 저장했어요. 이제 전환하면 자동으로 이어집니다.", name))
+                    } catch { lastError = loc("Desktop 자동 캡처 실패: %@", error.localizedDescription) }
                     return
                 }
             }
@@ -295,7 +295,7 @@ final class AppState: ObservableObject {
 
     func setPrimary(_ id: UUID) {
         do { try store.setPrimary(id) } catch {
-            lastError = "Primary 변경 실패: \(error.localizedDescription)"
+            lastError = loc("Primary 변경 실패: %@", error.localizedDescription)
             return
         }
         MobiusNotification.postAccountsChanged()
@@ -315,9 +315,9 @@ final class AppState: ObservableObject {
         guard loginFlow == nil else { return } // 진행 중이면 중복 실행 방지
         // 계정 추가는 `claude auth login`으로 동작 — CLI가 없으면 설정에서 설치하도록 안내
         guard ClaudeCLI.isInstalled else {
-            lastError = "Claude Code CLI가 필요합니다 — 설정에서 설치하세요."
-            notify(title: "Claude Code CLI 필요",
-                   body: "계정을 추가하려면 먼저 Claude Code CLI를 설치하세요. 설정 → Claude Code CLI에서 설치할 수 있어요.")
+            lastError = loc("Claude Code CLI가 필요합니다 — 설정에서 설치하세요.")
+            notify(title: loc("Claude Code CLI 필요"),
+                   body: loc("계정을 추가하려면 먼저 Claude Code CLI를 설치하세요. 설정 → Claude Code CLI에서 설치할 수 있어요."))
             return
         }
         let flow = LoginFlowController(io: io, store: store, switcher: switcher)
@@ -326,10 +326,10 @@ final class AppState: ObservableObject {
             do {
                 switch try await flow.run() {
                 case .added(let profile):
-                    notify(title: "계정 추가 완료",
+                    notify(title: loc("계정 추가 완료"),
                            body: "\(profile.nickname) <\(profile.emailAddress)>")
                 case .refreshed(let profile):
-                    notify(title: "기존 계정 자격증명 갱신됨",
+                    notify(title: loc("기존 계정 자격증명 갱신됨"),
                            body: "\(profile.nickname) <\(profile.emailAddress)>")
                 }
                 reload()
@@ -340,7 +340,7 @@ final class AppState: ObservableObject {
             } catch {
                 lastError = error.localizedDescription
                 // 팝오버가 닫혀 있어도 인지할 수 있도록 알림으로도 전달
-                notify(title: "계정 추가 실패", body: error.localizedDescription)
+                notify(title: loc("계정 추가 실패"), body: error.localizedDescription)
             }
             loginFlow = nil
         }
@@ -375,11 +375,11 @@ final class AppState: ObservableObject {
         guard let profile = store.file.accounts.first(where: { $0.id == id }) else { return }
         // 안전 가드: Desktop 캡처는 현재 활성 계정의 세션을 잡으므로, 활성 계정에서만 허용한다.
         guard id == store.file.activeAccountID else {
-            lastError = "먼저 이 계정으로 전환한 뒤 Claude Desktop을 연결하세요."
+            lastError = loc("먼저 이 계정으로 전환한 뒤 Claude Desktop을 연결하세요.")
             return
         }
         guard desktopSwitcher.isDesktopInstalled else {
-            lastError = "Claude Desktop이 설치되어 있지 않습니다."
+            lastError = loc("Claude Desktop이 설치되어 있지 않습니다.")
             return
         }
         desktopCapture = DesktopCaptureSession(accountID: id, nickname: profile.nickname)
@@ -400,7 +400,7 @@ final class AppState: ObservableObject {
             await desktopCoordinator.terminateAndWait()
             try? desktopSwitcher.restoreStashedIdentity(from: stash)
             if await !desktopCoordinator.launch() {
-                lastError = "Claude Desktop 재실행 실패 — 업데이트 적용 중일 수 있어요. 잠시 후 수동으로 실행해주세요."
+                lastError = loc("Claude Desktop 재실행 실패 — 업데이트 적용 중일 수 있어요. 잠시 후 수동으로 실행해주세요.")
             }
         }
     }
@@ -412,12 +412,12 @@ final class AppState: ObservableObject {
         do {
             desktopCaptureStash = try desktopSwitcher.stashLiveIdentity()
         } catch {
-            desktopCapture?.step = .failed("Desktop 로그아웃 실패: \(error.localizedDescription)")
+            desktopCapture?.step = .failed(loc("Desktop 로그아웃 실패: %@", error.localizedDescription))
             return
         }
         if await !desktopCoordinator.launch() {
             desktopCapture?.step = .failed(
-                "Claude Desktop 재실행 실패 — 업데이트 적용 중일 수 있어요. 잠시 후 다시 시도해주세요.")
+                loc("Claude Desktop 재실행 실패 — 업데이트 적용 중일 수 있어요. 잠시 후 다시 시도해주세요."))
             return
         }
         guard !Task.isCancelled, desktopCapture?.accountID == id else { return }
@@ -441,7 +441,7 @@ final class AppState: ObservableObject {
                     // 재실행했는데도 로그아웃이 안 됨 — 6초까지 기다려보고 계속이면 실패 판정.
                     if Date().timeIntervalSince(stillLoggedInSince) >= 6 {
                         desktopCapture?.step = .failed(
-                            "Claude Desktop 로그아웃에 실패했어요. 잠시 후 다시 시도하거나, Desktop을 완전히 종료한 뒤 다시 연결해주세요.")
+                            loc("Claude Desktop 로그아웃에 실패했어요. 잠시 후 다시 시도하거나, Desktop을 완전히 종료한 뒤 다시 연결해주세요."))
                         return
                     }
                 } else {
@@ -459,14 +459,14 @@ final class AppState: ObservableObject {
                 return
             }
         }
-        desktopCapture?.step = .failed("5분 안에 로그인이 감지되지 않았습니다. 다시 시도해주세요.")
+        desktopCapture?.step = .failed(loc("5분 안에 로그인이 감지되지 않았습니다. 다시 시도해주세요."))
     }
 
     private func finishDesktopCapture(for id: UUID) {
         // 로그인 전(신원 파일 없음)에 저장을 누른 경우 빈 세션을 캡처하지 않도록 막는다.
         guard desktopSwitcher.identityLastModified() != nil else {
             desktopCapture?.step = .failed(
-                "아직 로그인이 감지되지 않았어요. Claude Desktop에서 로그인을 마친 뒤 다시 저장을 눌러주세요.")
+                loc("아직 로그인이 감지되지 않았어요. Claude Desktop에서 로그인을 마친 뒤 다시 저장을 눌러주세요."))
             return
         }
         desktopCapture?.step = .saving
@@ -479,10 +479,10 @@ final class AppState: ObservableObject {
             reload()
             desktopCapture?.step = .done
             let name = store.file.accounts.first { $0.id == id }?.nickname ?? "?"
-            notify(title: "Desktop 스냅샷 저장",
-                   body: "\(name) 전환 시 Claude Desktop도 함께 전환됩니다.")
+            notify(title: loc("Desktop 스냅샷 저장"),
+                   body: loc("%@ 전환 시 Claude Desktop도 함께 전환됩니다.", name))
         } catch {
-            desktopCapture?.step = .failed("저장 실패: \(error.localizedDescription)")
+            desktopCapture?.step = .failed(loc("저장 실패: %@", error.localizedDescription))
         }
     }
 

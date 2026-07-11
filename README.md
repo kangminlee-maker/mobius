@@ -92,7 +92,10 @@ macOS가 *"'Mobius'은(는) 확인되지 않은 개발자가 배포했기 때문
 ① Desktop이 열리고 ② 그 계정으로 로그인하면 ③ 자동으로 저장됩니다.
 연결해두면 계정 전환 시 Desktop도 같은 계정으로 따라 바뀝니다 (재시작 2~5초).
 
-### 터미널에서 (mobius CLI)
+## 터미널에서도 쓸 수 있어요 (선택)
+
+앱만으로 모든 기능을 쓸 수 있지만, 터미널이 익숙하다면 `mobius` 명령으로도 전환할 수 있습니다
+(앱 **설정 → mobius CLI → 설치**):
 
 ```
 mobius list              # 계정 목록 (활성 ●, 우선순위, 한도 상태)
@@ -152,7 +155,3 @@ CLI로 전환해도 실행 중인 앱 화면에 즉시 반영됩니다.
 - Desktop 스냅샷은 `~/Library/Application Support/Mobius/desktop-profiles/`에 0700 권한으로
   저장됩니다. Cookies는 원본부터 Keychain 키로 암호화되어 있어 평문 유출이 아닙니다.
 - 계정을 삭제하면 해당 비밀 스냅샷과 Desktop 스냅샷도 함께 삭제됩니다.
-
-## QA 체크리스트
-
-수동 통합 QA 항목: [docs/qa/m1-checklist.md](docs/qa/m1-checklist.md)

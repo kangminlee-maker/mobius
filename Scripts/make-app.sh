@@ -11,6 +11,9 @@ mkdir -p "$APP/Contents/MacOS"
 # (SettingsView의 Bundle.main.url(forAuxiliaryExecutable: "mobius")가 이 이름에 의존).
 cp .build/release/MobiusApp "$APP/Contents/MacOS/MobiusApp"
 cp .build/release/mobius "$APP/Contents/MacOS/mobius"
+# 다국어 리소스 번들 (Bundle.module이 Contents/Resources에서 찾는다)
+mkdir -p "$APP/Contents/Resources"
+cp -R .build/release/Mobius_MobiusApp.bundle "$APP/Contents/Resources/"
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

@@ -45,17 +45,17 @@ struct AccountListView: View {
                 .font(.system(size: 11)).foregroundStyle(.secondary)
         }
         .buttonStyle(.plain)
-        .help("자동 Fallback이 무엇인지 보기")
+        .help(loc("자동 Fallback이 무엇인지 보기"))
         .popover(isPresented: $showFallbackInfo, arrowEdge: .bottom) {
             VStack(alignment: .leading, spacing: 8) {
-                Label("자동 Fallback", systemImage: "infinity")
+                Label(loc("자동 Fallback"), systemImage: "infinity")
                     .font(.system(size: 12, weight: .semibold))
-                Text("사용하던 계정의 한도가 다 차면, 아래 순서(우선순위)대로 여유 있는 다음 계정으로 자동 전환됩니다.")
+                Text(loc("사용하던 계정의 한도가 다 차면, 아래 순서(우선순위)대로 여유 있는 다음 계정으로 자동 전환됩니다."))
                     .font(.system(size: 11)).foregroundStyle(.secondary)
-                Text("맨 위 계정의 한도가 초기화되면 다시 맨 위 계정으로 돌아옵니다.")
+                Text(loc("맨 위 계정의 한도가 초기화되면 다시 맨 위 계정으로 돌아옵니다."))
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                 Divider()
-                Text("끄면 자동 전환 없이 한도 소진 알림만 보냅니다. 계정은 카드를 눌러 직접 바꿀 수 있어요.")
+                Text(loc("끄면 자동 전환 없이 한도 소진 알림만 보냅니다. 계정은 카드를 눌러 직접 바꿀 수 있어요."))
                     .font(.system(size: 11)).foregroundStyle(.tertiary)
             }
             .padding(14)
@@ -70,10 +70,10 @@ struct AccountListView: View {
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(Color(red: 0.35, green: 0.65, blue: 1.0))
             Text("Mobius").font(.system(size: 14, weight: .bold, design: .rounded))
-            Text("뫼비우스").font(.system(size: 10)).foregroundStyle(.tertiary)
+            Text(loc("뫼비우스")).font(.system(size: 10)).foregroundStyle(.tertiary)
             Spacer()
             fallbackInfoButton
-            Toggle("Claude Code CLI 자동 Fallback", isOn: Binding(
+            Toggle(loc("Claude Code CLI 자동 Fallback"), isOn: Binding(
                 get: { state.file.autoSwitchEnabled },
                 set: { state.setAutoSwitch($0) }))
                 .toggleStyle(.switch).controlSize(.mini)
@@ -131,23 +131,23 @@ struct AccountListView: View {
             }
             .contextMenu {
                 if !isPrimary {
-                    Button("Primary 계정으로 설정") {
+                    Button(loc("Primary 계정으로 설정")) {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                             state.setPrimary(p.id)
                         }
                     }
                 }
-                Button(p.hasDesktopSnapshot ? "Claude Desktop 다시 연결" : "Claude Desktop 연결") {
+                Button(p.hasDesktopSnapshot ? loc("Claude Desktop 다시 연결") : loc("Claude Desktop 연결")) {
                     state.beginDesktopCapture(for: p.id)
                 }
-                Button("삭제", role: .destructive) { state.removeAccount(p.id) }
+                Button(loc("삭제"), role: .destructive) { state.removeAccount(p.id) }
             }
     }
 
     private var emptyView: some View {
         VStack(spacing: 8) {
             Image(systemName: "infinity").font(.system(size: 28)).foregroundStyle(.tertiary)
-            Text("등록된 계정이 없습니다").font(.system(size: 12)).foregroundStyle(.secondary)
+            Text(loc("등록된 계정이 없습니다")).font(.system(size: 12)).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 24)
     }
@@ -155,7 +155,7 @@ struct AccountListView: View {
     private var footer: some View {
         HStack {
             Button { state.addAccount() } label: {
-                Label("계정 추가", systemImage: "plus.circle.fill").font(.system(size: 11))
+                Label(loc("계정 추가"), systemImage: "plus.circle.fill").font(.system(size: 11))
             }.buttonStyle(.plain).foregroundStyle(.secondary)
             Spacer()
             if let err = state.lastError {

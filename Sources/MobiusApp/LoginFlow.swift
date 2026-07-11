@@ -277,12 +277,11 @@ enum LoginFlowError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .urlNotFound:
-            return "로그인 URL을 얻지 못했습니다. 터미널에서 `claude auth login`으로 로그인한 뒤 "
-                + "`mobius capture <이름>`으로 계정을 등록하세요."
+            return loc("로그인 URL을 얻지 못했습니다. 터미널에서 `claude auth login`으로 로그인한 뒤 `mobius capture <이름>`으로 계정을 등록하세요.")
         case .timeout:
-            return "로그인 대기 시간이 초과되었습니다. 다시 시도해주세요."
+            return loc("로그인 대기 시간이 초과되었습니다. 다시 시도해주세요.")
         case .canceled:
-            return "로그인이 취소되었습니다."
+            return loc("로그인이 취소되었습니다.")
         }
     }
 }

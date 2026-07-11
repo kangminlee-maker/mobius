@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "Mobius",
+    defaultLocalization: "ko",
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "MobiusCore", targets: ["MobiusCore"]),

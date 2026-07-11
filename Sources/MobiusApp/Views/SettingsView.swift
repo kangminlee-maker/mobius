@@ -27,19 +27,19 @@ struct SettingsView: View {
             HStack(spacing: 8) {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("설치됨\(info.version.isEmpty ? "" : " · \(info.version)")")
+                    Text(loc("설치됨") + (info.version.isEmpty ? "" : " · \(info.version)"))
                         .font(.system(size: 12))
                     Text(info.path).font(.system(size: 9)).foregroundStyle(.tertiary).lineLimit(1)
                 }
                 Spacer()
             }
         } else if !claudeChecked {
-            HStack { ProgressView().controlSize(.small); Text("확인 중…").font(.caption).foregroundStyle(.secondary) }
+            HStack { ProgressView().controlSize(.small); Text(loc("확인 중…")).font(.caption).foregroundStyle(.secondary) }
         } else {
             VStack(alignment: .leading, spacing: 6) {
-                Label("Claude Code CLI가 설치되어 있지 않아요", systemImage: "exclamationmark.triangle.fill")
+                Label(loc("Claude Code CLI가 설치되어 있지 않아요"), systemImage: "exclamationmark.triangle.fill")
                     .font(.system(size: 12, weight: .semibold)).foregroundStyle(.orange)
-                Text("Mobius는 Claude Code CLI로 계정을 로그인·전환합니다. 아래 버튼으로 공식 설치 스크립트를 실행하세요 (관리자 권한 불필요).")
+                Text(loc("Mobius는 Claude Code CLI로 계정을 로그인·전환합니다. 아래 버튼으로 공식 설치 스크립트를 실행하세요 (관리자 권한 불필요)."))
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack {
@@ -47,8 +47,8 @@ struct SettingsView: View {
                         installClaude()
                     } label: {
                         if installingClaude {
-                            HStack(spacing: 6) { ProgressView().controlSize(.small); Text("설치 중…") }
-                        } else { Text("Claude Code 설치") }
+                            HStack(spacing: 6) { ProgressView().controlSize(.small); Text(loc("설치 중…")) }
+                        } else { Text(loc("Claude Code 설치")) }
                     }
                     .disabled(installingClaude)
                     Spacer()
@@ -70,14 +70,14 @@ struct SettingsView: View {
 
     private func installClaude() {
         installingClaude = true
-        claudeInstallMessage = "설치 스크립트를 내려받아 실행 중입니다… (최대 1~2분)"
+        claudeInstallMessage = loc("설치 스크립트를 내려받아 실행 중입니다… (최대 1~2분)")
         Task {
             let err = await ClaudeCLI.install()
             let info = ClaudeCLI.locate()
             await MainActor.run {
                 installingClaude = false
                 claudeInfo = info
-                claudeInstallMessage = err ?? "설치 완료! 이제 계정을 추가할 수 있어요."
+                claudeInstallMessage = err ?? loc("설치 완료! 이제 계정을 추가할 수 있어요.")
             }
         }
     }
@@ -88,13 +88,13 @@ struct SettingsView: View {
                 Section {
                     VStack(alignment: .leading, spacing: 6) {
                         Label(state.file.accounts.isEmpty
-                              ? "아직 등록된 계정이 없어요"
-                              : "Fallback 계정을 추가해 보세요",
+                              ? loc("아직 등록된 계정이 없어요")
+                              : loc("Fallback 계정을 추가해 보세요"),
                               systemImage: "infinity")
                             .font(.system(size: 13, weight: .semibold))
-                        Text(state.file.accounts.isEmpty
-                             ? "메뉴바의 ∞ 아이콘을 클릭하고 **계정 추가**를 눌러 Claude 계정을 등록하세요. 개인·회사 계정을 함께 등록해 두면, 한 계정의 사용량이 차는 순간 다음 계정으로 알아서 전환됩니다."
-                             : "지금은 계정이 하나뿐이라 사용량이 차면 기다리는 수밖에 없어요. 메뉴바의 ∞ 아이콘 → **계정 추가**로 계정을 하나 더 등록하면, 한도가 차는 순간 자동으로 이어서 쓸 수 있습니다.")
+                        Text(.init(state.file.accounts.isEmpty
+                             ? loc("메뉴바의 ∞ 아이콘을 클릭하고 **계정 추가**를 눌러 Claude 계정을 등록하세요. 개인·회사 계정을 함께 등록해 두면, 한 계정의 사용량이 차는 순간 다음 계정으로 알아서 전환됩니다.")
+                             : loc("지금은 계정이 하나뿐이라 사용량이 차면 기다리는 수밖에 없어요. 메뉴바의 ∞ 아이콘 → **계정 추가**로 계정을 하나 더 등록하면, 한도가 차는 순간 자동으로 이어서 쓸 수 있습니다.")))
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -105,38 +105,46 @@ struct SettingsView: View {
             Section("Claude Code CLI") {
                 claudeCLIRow
             }
-            Section("일반") {
-                Toggle("로그인 시 자동 시작", isOn: $launchAtLogin)
+            Section(loc("일반")) {
+                Picker(loc("언어"), selection: Binding(
+                    get: { L10n.current },
+                    set: { L10n.setLanguage($0); state.objectWillChange.send() })) {
+                    Text(loc("시스템 기본")).tag("system")
+                    Text("한국어").tag("ko")
+                    Text("English").tag("en")
+                    Text("日本語").tag("ja")
+                }
+                Toggle(loc("로그인 시 자동 시작"), isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, on in
                         do {
                             if on { try SMAppService.mainApp.register() }
                             else { try SMAppService.mainApp.unregister() }
-                        } catch { cliMessage = "실패: \(error.localizedDescription)" }
+                        } catch { cliMessage = loc("실패: %@", error.localizedDescription) }
                     }
-                Toggle("Claude Code CLI 자동 Fallback", isOn: Binding(
+                Toggle(loc("Claude Code CLI 자동 Fallback"), isOn: Binding(
                     get: { state.file.autoSwitchEnabled },
                     set: { state.setAutoSwitch($0) }))
                 VStack(alignment: .leading, spacing: 3) {
-                    Toggle("사용량 게이지 표시", isOn: $showUsageGauges)
-                    Text("계정 카드에 5시간·주간 사용량과 초기화 남은 시간을 표시합니다")
+                    Toggle(loc("사용량 게이지 표시"), isOn: $showUsageGauges)
+                    Text(loc("계정 카드에 5시간·주간 사용량과 초기화 남은 시간을 표시합니다"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 VStack(alignment: .leading, spacing: 3) {
-                    Toggle("Claude Desktop 자동 Fallback", isOn: Binding(
+                    Toggle(loc("Claude Desktop 자동 Fallback"), isOn: Binding(
                         get: { state.file.desktopAutoSwitchEnabled },
                         set: { state.setDesktopAutoSwitch($0) }))
-                    Text("자동 전환 시 Claude Desktop이 종료 후 재실행됩니다")
+                    Text(loc("자동 전환 시 Claude Desktop이 종료 후 재실행됩니다"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                Toggle("계정 전환 시 Claude Desktop도 전환 (experimental)", isOn: Binding(
+                Toggle(loc("계정 전환 시 Claude Desktop도 전환 (experimental)"), isOn: Binding(
                     get: { state.file.desktopSyncEnabled },
                     set: { state.setDesktopSync($0) }))
             }
             Section("mobius CLI") {
                 HStack {
-                    Text("`mobius` 명령어 설치")
+                    Text(.init(loc("`mobius` 명령어 설치")))
                     Spacer()
-                    Button("설치") { installCLI() }
+                    Button(loc("설치")) { installCLI() }
                 }
                 if !cliMessage.isEmpty {
                     Text(cliMessage).font(.caption).foregroundStyle(.secondary)
@@ -150,7 +158,7 @@ struct SettingsView: View {
     private func installCLI() {
         // 번들 내 mobius 바이너리 → /usr/local/bin 심볼릭 링크 (osascript로 관리자 권한)
         guard let src = Bundle.main.url(forAuxiliaryExecutable: "mobius")?.path else {
-            cliMessage = "번들에서 mobius 바이너리를 찾을 수 없습니다 (개발 빌드에서는 Scripts/install-cli.sh 사용)"
+            cliMessage = loc("번들에서 mobius 바이너리를 찾을 수 없습니다 (개발 빌드에서는 Scripts/install-cli.sh 사용)")
             return
         }
         let command = "mkdir -p /usr/local/bin && ln -sf \(shellQuoted(src)) /usr/local/bin/mobius"
@@ -159,9 +167,9 @@ struct SettingsView: View {
         NSAppleScript(source: script)?.executeAndReturnError(&error)
         if let error {
             let reason = error[NSAppleScript.errorMessage] as? String ?? "\(error)"
-            cliMessage = "설치 실패: \(reason)"
+            cliMessage = loc("설치 실패: %@", reason)
         } else {
-            cliMessage = "설치 완료: /usr/local/bin/mobius"
+            cliMessage = loc("설치 완료: /usr/local/bin/mobius")
         }
     }
 

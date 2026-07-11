@@ -41,7 +41,7 @@ struct AccountCardView: View {
                             .foregroundStyle(accent)
                     }
                     if profile.needsReauth {
-                        Text("재로그인 필요").font(.system(size: 9, weight: .medium))
+                        Text(loc("재로그인 필요")).font(.system(size: 9, weight: .medium))
                             .padding(.horizontal, 5).padding(.vertical, 2)
                             .background(.red.opacity(0.15), in: Capsule())
                             .foregroundStyle(.red)
@@ -62,21 +62,21 @@ struct AccountCardView: View {
             if onConnectDesktop != nil || onDelete != nil || onSetPrimary != nil {
                 Menu {
                     if let onSetPrimary {
-                        Button("Primary 계정으로 설정", systemImage: "star") { onSetPrimary() }
+                        Button(loc("Primary 계정으로 설정"), systemImage: "star") { onSetPrimary() }
                     }
                     if let onConnectDesktop {
                         // Desktop 연결은 이 계정이 '현재 활성'일 때만 — 캡처는 활성 세션을
                         // 잡으므로, 비활성 계정에서 연결하면 엉뚱한 계정이 저장된다.
                         Button(profile.hasDesktopSnapshot
-                               ? "Claude Desktop 다시 연결" : "Claude Desktop 연결",
+                               ? loc("Claude Desktop 다시 연결") : loc("Claude Desktop 연결"),
                                systemImage: "macwindow") { onConnectDesktop() }
                             .disabled(!isActive)
                         if !isActive {
-                            Text("이 계정으로 전환한 뒤 연결할 수 있어요")
+                            Text(loc("이 계정으로 전환한 뒤 연결할 수 있어요"))
                         }
                     }
                     if let onDelete {
-                        Button("계정 삭제", systemImage: "trash", role: .destructive) { onDelete() }
+                        Button(loc("계정 삭제"), systemImage: "trash", role: .destructive) { onDelete() }
                     }
                 } label: {
                     Image(systemName: "ellipsis")
@@ -102,7 +102,7 @@ struct AccountCardView: View {
     @ViewBuilder private var statusLine: some View {
         if autoSwitchOn, let rl = profile.rateLimit, rl.resetsAt > now {
             let mins = max(0, Int(rl.resetsAt.timeIntervalSince(now) / 60))
-            Label("리셋까지 \(mins / 60)시간 \(mins % 60)분", systemImage: "hourglass")
+            Label(loc("리셋까지 %d시간 %d분", mins / 60, mins % 60), systemImage: "hourglass")
                 .font(.system(size: 10)).foregroundStyle(.orange)
         } else {
             Text(profile.tierDescription)
@@ -115,10 +115,10 @@ struct AccountCardView: View {
     private func gauges(_ u: UsageSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             if let pct = u.fiveHourPercent {
-                gaugeRow(label: "5시간", percent: pct, resetsAt: u.fiveHourResetsAt)
+                gaugeRow(label: loc("5시간"), percent: pct, resetsAt: u.fiveHourResetsAt)
             }
             if let pct = u.sevenDayPercent {
-                gaugeRow(label: "주간", percent: pct, resetsAt: u.sevenDayResetsAt)
+                gaugeRow(label: loc("주간"), percent: pct, resetsAt: u.sevenDayResetsAt)
             }
         }
     }
@@ -143,7 +143,7 @@ struct AccountCardView: View {
                 .foregroundStyle(gaugeColor(percent))
                 .frame(width: 26, alignment: .trailing)
             if let resetsAt, resetsAt > now {
-                Text("초기화 \(remainText(until: resetsAt))")
+                Text(loc("초기화 %@", remainText(until: resetsAt)))
                     .font(.system(size: 9)).foregroundStyle(.tertiary)
                     .lineLimit(1).fixedSize().layoutPriority(1) // 절대 잘리지 않게 — 바가 대신 줄어든다
             }
@@ -162,8 +162,8 @@ struct AccountCardView: View {
     private func remainText(until date: Date) -> String {
         let mins = max(0, Int(date.timeIntervalSince(now) / 60))
         let (d, h, m) = (mins / 1440, (mins % 1440) / 60, mins % 60)
-        if d > 0 { return "\(d)일 \(h)시간 후" }
-        if h > 0 { return "\(h)시간 \(m)분 후" }
-        return "\(m)분 후"
+        if d > 0 { return loc("%d일 %d시간 후", d, h) }
+        if h > 0 { return loc("%d시간 %d분 후", h, m) }
+        return loc("%d분 후", m)
     }
 }

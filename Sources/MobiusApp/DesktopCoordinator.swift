@@ -5,7 +5,7 @@ enum DesktopCoordinatorError: Error, LocalizedError {
     case switchInProgress
     var errorDescription: String? {
         switch self {
-        case .switchInProgress: return "이전 Desktop 전환이 아직 진행 중입니다."
+        case .switchInProgress: return loc("이전 Desktop 전환이 아직 진행 중입니다.")
         }
     }
 }

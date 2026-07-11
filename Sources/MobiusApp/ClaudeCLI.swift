@@ -35,11 +35,11 @@ enum ClaudeCLI {
         // 설치 스크립트는 홈 아래에 쓰므로 관리자 권한 불필요.
         let script = "curl -fsSL https://claude.ai/install.sh | bash"
         guard let (code, output) = await runLoginShellAsync(script) else {
-            return "설치 프로세스를 시작하지 못했습니다."
+            return loc("설치 프로세스를 시작하지 못했습니다.")
         }
         if code == 0, isInstalled { return nil }
         let tail = output.split(separator: "\n").suffix(3).joined(separator: " ")
-        return "설치 실패 (코드 \(code)). \(tail)"
+        return loc("설치 실패 (코드 %d). %@", code, tail)
     }
 
     // MARK: 셸 실행
