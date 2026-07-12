@@ -275,38 +275,6 @@ struct SettingsView: View {
                 // com.openai.codex(Codex 데스크톱)만 대상으로 감지한다.
                 toolRow("ChatGPT", path: chatGPTApp?.path, version: chatGPTApp?.version)
             }
-            Section("Experimental") {
-                Toggle(isOn: Binding(
-                    get: { state.file.desktopSyncEnabled },
-                    set: { state.setDesktopSync($0) })) {
-                    HStack(spacing: 5) {
-                        Text(loc("계정 전환 시 Claude Desktop도 전환"))
-                        desktopInfoButton(
-                            isPresented: $showDesktopSyncInfo,
-                            when: loc("카드를 눌러 직접 계정을 바꿀 때"),
-                            note: loc("자동 전환일 때는 '자동 전환 시에도 Claude Desktop 전환'이 담당해요. Desktop에 연결해 둔 계정에서만 동작해요."))
-                    }
-                }
-                Toggle(isOn: Binding(
-                    get: { state.file.desktopAutoSwitchEnabled },
-                    set: { state.setDesktopAutoSwitch($0) })) {
-                    HStack(spacing: 5) {
-                        Text(loc("자동 전환 시에도 Claude Desktop 전환"))
-                        desktopInfoButton(
-                            isPresented: $showDesktopAutoInfo,
-                            when: loc("한도가 차서 Mobius가 알아서 계정을 바꿀 때"),
-                            note: loc("카드를 눌러 직접 바꿀 때는 '계정 전환 시 Claude Desktop도 전환'이 담당해요."))
-                    }
-                }
-                VStack(alignment: .leading, spacing: 3) {
-                    Toggle(loc("한도 초기화 확정 (최소 호출)"), isOn: Binding(
-                        get: { state.file.resetProbeEnabled },
-                        set: { state.setResetProbe($0) }))
-                    Text(loc("초기화된 계정에 최소한의 호출 1회를 보내 다음 초기화 시점을 확정하고 알림으로 알려줍니다. 호출은 소량의 사용량을 소비합니다."))
-                        .font(.caption).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
             labsSection
             Section(loc("업데이트")) {
                 HStack {
@@ -388,6 +356,36 @@ struct SettingsView: View {
 
     private var labsSection: some View {
         Section(loc("실험실")) {
+            Toggle(isOn: Binding(
+                get: { state.file.desktopSyncEnabled },
+                set: { state.setDesktopSync($0) })) {
+                HStack(spacing: 5) {
+                    Text(loc("계정 전환 시 Claude Desktop도 전환"))
+                    desktopInfoButton(
+                        isPresented: $showDesktopSyncInfo,
+                        when: loc("카드를 눌러 직접 계정을 바꿀 때"),
+                        note: loc("자동 전환일 때는 '자동 전환 시에도 Claude Desktop 전환'이 담당해요. Desktop에 연결해 둔 계정에서만 동작해요."))
+                }
+            }
+            Toggle(isOn: Binding(
+                get: { state.file.desktopAutoSwitchEnabled },
+                set: { state.setDesktopAutoSwitch($0) })) {
+                HStack(spacing: 5) {
+                    Text(loc("자동 전환 시에도 Claude Desktop 전환"))
+                    desktopInfoButton(
+                        isPresented: $showDesktopAutoInfo,
+                        when: loc("한도가 차서 Mobius가 알아서 계정을 바꿀 때"),
+                        note: loc("카드를 눌러 직접 바꿀 때는 '계정 전환 시 Claude Desktop도 전환'이 담당해요."))
+                }
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Toggle(loc("한도 초기화 확정 (최소 호출)"), isOn: Binding(
+                    get: { state.file.resetProbeEnabled },
+                    set: { state.setResetProbe($0) }))
+                Text(loc("초기화된 계정에 최소한의 호출 1회를 보내 다음 초기화 시점을 확정하고 알림으로 알려줍니다. 호출은 소량의 사용량을 소비합니다."))
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             VStack(alignment: .leading, spacing: 3) {
                 Toggle(loc("다른 Mac과 동기화"), isOn: $syncEnabled)
                 Text(loc("이 Mac에서 켠 항목만 동기화에 참여해요. 끄면 이 Mac은 아무 영향도 받지 않아요."))

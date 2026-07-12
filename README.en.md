@@ -94,15 +94,15 @@ instead of creating a duplicate.
 ### Settings toggles
 
 All in Settings (⚙). **Auto-switch** is a per-CLI toggle under Installed Tools
-(Claude Code CLI / Codex CLI each); the two Claude Desktop toggles live in the
-**Experimental** section.
+(Claude Code CLI / Codex CLI each); the two Claude Desktop toggles and reset-pinning
+live in the **Labs** (실험실) section.
 
 | Toggle | Section | Default | What it does |
 |---|---|---|---|
 | Auto-switch (per CLI) | Installed Tools | On | Auto-switch when a limit is hit. Off = notification only; manual switching always works |
-| Also switch Claude Desktop on auto-switch | Experimental | Off | Also switch Claude Desktop on auto-switch (Desktop restarts at that moment) |
-| Also switch Claude Desktop on account switch | Experimental | Off | Co-switch Desktop on card-click switches. Works only for accounts connected to Desktop |
-| Pin limit resets (minimal call) | Experimental | Off | Sends one minimal call to an account whose limit has reset, pinning the next reset time and notifying you. Consumes a tiny amount of usage (Codex: active account only) |
+| Also switch Claude Desktop on auto-switch | Labs | Off | Also switch Claude Desktop on auto-switch (Desktop restarts at that moment) |
+| Also switch Claude Desktop on account switch | Labs | Off | Co-switch Desktop on card-click switches. Works only for accounts connected to Desktop |
+| Pin limit resets (minimal call) | Labs | Off | Sends one minimal call to an account whose limit has reset, pinning the next reset time and notifying you. Consumes a tiny amount of usage (Codex: active account only) |
 
 ### Using Claude Desktop too
 

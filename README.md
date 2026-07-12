@@ -91,14 +91,14 @@ macOS가 *"'Mobius'은(는) 확인되지 않은 개발자가 배포했기 때문
 ### 설정 토글
 
 설정(⚙)에서 조절합니다. **자동 전환**은 설치 현황의 CLI별 토글(Claude Code CLI /
-Codex CLI 각각), Claude Desktop 토글 2개는 **Experimental** 섹션에 있습니다.
+Codex CLI 각각), Claude Desktop 토글 2개와 한도 초기화 확정은 **실험실** 섹션에 있습니다.
 
 | 토글 | 위치 | 기본값 | 하는 일 |
 |---|---|---|---|
 | 자동 전환 (CLI별) | 설치 현황 | 켬 | 한도가 차면 다음 계정으로 자동 전환. 끄면 알림만 오고 수동 전환은 언제나 가능 |
-| 자동 전환 시에도 Claude Desktop 전환 | Experimental | 끔 | 자동 전환 때 Claude Desktop도 함께 전환 (전환 순간 Desktop이 재시작됨) |
-| 계정 전환 시 Claude Desktop도 전환 | Experimental | 끔 | 카드 클릭 전환 때 Desktop 동시 전환. 해당 계정을 Desktop에 연결해둔 경우에만 동작 |
-| 한도 초기화 확정 (최소 호출) | Experimental | 끔 | 한도가 초기화된 계정에 최소 호출 1회를 보내 다음 초기화 시점을 확정하고 알림. 소량의 사용량을 소비 (Codex는 활성 계정만) |
+| 자동 전환 시에도 Claude Desktop 전환 | 실험실 | 끔 | 자동 전환 때 Claude Desktop도 함께 전환 (전환 순간 Desktop이 재시작됨) |
+| 계정 전환 시 Claude Desktop도 전환 | 실험실 | 끔 | 카드 클릭 전환 때 Desktop 동시 전환. 해당 계정을 Desktop에 연결해둔 경우에만 동작 |
+| 한도 초기화 확정 (최소 호출) | 실험실 | 끔 | 한도가 초기화된 계정에 최소 호출 1회를 보내 다음 초기화 시점을 확정하고 알림. 소량의 사용량을 소비 (Codex는 활성 계정만) |
 
 ### Claude Desktop도 함께 쓰려면
 

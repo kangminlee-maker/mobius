@@ -281,7 +281,8 @@ Sources/MobiusApp/        SwiftUI 메뉴바 앱 + AppState + Views/ + LoginFlow 
   `autoSwitchByProvider`(풀별, 구 키는 디코드 시 양쪽 풀 적용 + encode 시 Claude 값 병행
   기록), 엔진/스토어/CLI(`mobius auto --provider`, 미지정 시 양쪽)/앱 전부 풀별 배선.
   설정 Form: 일반(언어/자동시작/게이지/mobius CLI pill 행) → 설치 현황(Claude·Codex CLI
-  블록에 자동 전환 토글 + 등록 계정 요약 + 계정 추가) → Experimental(Desktop 토글 2개, 최하단).
+  블록에 자동 전환 토글 + 등록 계정 요약 + 계정 추가) → 실험실(Desktop 토글 2개 + 리셋 프로브
+  + 멀티 Mac 동기화 — upstream 기준 단일 experimental 섹션으로 통합) → 업데이트.
   메뉴바: 헤더 전역 토글·info popover·footer 계정 추가 제거(설정으로 일원화), ⚙/전원 히트
   타깃 28pt. 용어 '자동 fallback' → '자동 전환'(계정 역할명 primary/fallback은 유지).
   테스트 103개 green.
@@ -289,7 +290,7 @@ Sources/MobiusApp/        SwiftUI 메뉴바 앱 + AppState + Views/ + LoginFlow 
   `docs/design/reset-probe-prep.md`)**: 소진→리셋된 계정의 5h 창은 첫 호출 전까지 다음
   리셋 미정(실측: 유휴 시 resets_at null, GET은 창을 안 시작; Codex도 동일 의미론).
   리셋 도래 시 최소 호출 1회로 창 확정 + rateLimit 해제 + 알림("다음 초기화 HH:mm").
-  Experimental 전역 토글 `resetProbeEnabled`(기본 끔). Claude: /v1/messages가 시스템
+  실험실 섹션 전역 토글 `resetProbeEnabled`(기본 끔). Claude: /v1/messages가 시스템
   프롬프트 없이 OAuth 수락(haiku-4-5, max_tokens 1; usage 반영 지연 15~30초 → 폴링,
   리셋 시각 10분 그리드 스냅), 비활성 계정도 가능·만료 토큰은 스킵(리프레시 금지).
   Codex: 활성 계정만, `codex exec --json`의 thread_id로 rollout 파일 특정해 직접 파싱
