@@ -286,7 +286,7 @@ footer{border-top:1px solid var(--line);padding:34px 0;color:var(--faint);font-s
       <div class="card rv">
         <div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#59a6ff" stroke-width="1.8" stroke-linecap="round"><path d="M12 3l7 4v5c0 4.4-3 7.4-7 9-4-1.6-7-4.6-7-9V7l7-4z"/></svg></div>
         <h3 data-i18n="f3_h">No background polling</h3>
-        <p data-i18n="f3_p">Limits are detected from local logs — zero network. The only server call is the usage gauge, fetched when you open the popover. Turn it off and Mobius goes fully offline.</p>
+        <p data-i18n="f3_p">Limits are detected from local logs — zero network. The only server calls are the usage gauge (when you open the popover) and a once-a-day update check. Both can be switched off.</p>
       </div>
       <div class="card rv">
         <div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#59a6ff" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
@@ -396,7 +396,7 @@ const ko = {
   ft_eb:"매일 쓰라고 만든 것", ft_h2:"작은 앱, 뚜렷한 원칙.",
   f1_h:"클릭 한 번 전환", f1_p:"카드를 누르면 바로 그 계정입니다. 전환이 실패하면 이전 상태로 되돌립니다 — 어중간한 상태는 없습니다.",
   f2_h:"사용량 게이지", f2_p:"계정마다 5시간·주간 사용량과 리셋까지 남은 시간을 보여줍니다. 팝오버를 열 때만 조회합니다(4분 캐시).",
-  f3_h:"백그라운드 폴링 없음", f3_p:"한도 감지는 로컬 로그만 씁니다 — 네트워크 0. 서버 호출은 사용량 게이지뿐이고, 그것도 팝오버를 열 때만입니다. 게이지를 끄면 완전히 오프라인으로 동작합니다.",
+  f3_h:"백그라운드 폴링 없음", f3_p:"한도 감지는 로컬 로그만 씁니다 — 네트워크 0. 서버 호출은 팝오버를 열 때의 사용량 게이지와 하루 한 번의 업데이트 확인뿐이고, 둘 다 끌 수 있습니다.",
   f4_h:"Claude Desktop까지", f4_p:"계정을 한 번 연결해두면 전환할 때마다 Desktop도 2~5초 재시작으로 따라옵니다.",
   f5_h:"만료된 로그인 감지", f5_p:"로그인이 만료된 계정은 카드에 '다시 로그인' 버튼이 나타나고, 다시 로그인할 때까지 자동 전환에서 제외됩니다.",
   f6_h:"당신의 언어로", f6_p:"한국어, English, 日本語 — 시스템 언어를 따르거나 설정에서 고정할 수 있습니다.",

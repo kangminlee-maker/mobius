@@ -117,6 +117,48 @@ final class AppState: ObservableObject {
         }
     }
 
+    // MARK: 업데이트 확인
+
+    enum UpdateStatus: Equatable { case idle, checking, upToDate, available(ReleaseInfo), failed }
+    @Published var updateStatus: UpdateStatus = .idle
+    static let updateCheckInterval: TimeInterval = 24 * 3600 // 하루 1회
+
+    var currentVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
+    }
+
+    /// manual=false(자동)는 토글 켜짐 + 마지막 확인에서 24시간 경과 시에만 조회.
+    /// 자동 발견 알림은 같은 버전에 대해 한 번만 보낸다 (매일 잔소리 방지).
+    func checkForUpdates(manual: Bool = false) {
+        let defaults = UserDefaults.standard
+        if !manual {
+            let enabled = defaults.object(forKey: "autoUpdateCheck") == nil
+                || defaults.bool(forKey: "autoUpdateCheck")
+            guard enabled else { return }
+            let last = defaults.double(forKey: "lastUpdateCheckAt")
+            guard Date().timeIntervalSince1970 - last >= Self.updateCheckInterval else { return }
+        }
+        guard updateStatus != .checking else { return }
+        updateStatus = .checking
+        defaults.set(Date().timeIntervalSince1970, forKey: "lastUpdateCheckAt")
+        Task { @MainActor in
+            guard let info = try? await UpdateChecker.fetchLatest() else {
+                updateStatus = manual ? .failed : .idle
+                return
+            }
+            if UpdateChecker.isNewer(info.version, than: currentVersion) {
+                updateStatus = .available(info)
+                if !manual, defaults.string(forKey: "lastNotifiedVersion") != info.version {
+                    defaults.set(info.version, forKey: "lastNotifiedVersion")
+                    notify(title: loc("새 버전이 나왔어요"),
+                           body: loc("Mobius v%@ — 설정에서 업데이트를 확인하세요.", info.version))
+                }
+            } else {
+                updateStatus = .upToDate
+            }
+        }
+    }
+
     func reload() {
         // AccountStore는 자기 인스턴스 상태를 유지하므로 디스크에서 재로드
         if let fresh = try? AccountStore(env: env, keychain: SystemKeychain()) {
@@ -140,6 +182,7 @@ final class AppState: ObservableObject {
     // MARK: 주기 처리
 
     func tick() async {
+        checkForUpdates() // 내부에서 24시간 게이트 — 실제 조회는 하루 1회
         // 로그인 창이 열려 있는 동안은 reconcile/자동 전환이 LoginFlow의
         // 자격증명 변경 감지와 경합하지 않도록 전체를 건너뛴다.
         // Desktop 가이드 캡처 중에도 동일 — 자동 전환이 Desktop을 재실행하면

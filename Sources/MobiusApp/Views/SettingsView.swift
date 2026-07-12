@@ -6,6 +6,7 @@ struct SettingsView: View {
     @State private var launchAtLogin = (SMAppService.mainApp.status == .enabled)
     @State private var cliMessage = ""
     @AppStorage("showUsageGauges") private var showUsageGauges = true
+    @AppStorage("autoUpdateCheck") private var autoUpdateCheck = true
     @State private var claudeInfo: ClaudeCLI.Info?
     @State private var claudeChecked = false
     @State private var installingClaude = false
@@ -140,6 +141,20 @@ struct SettingsView: View {
                     get: { state.file.desktopSyncEnabled },
                     set: { state.setDesktopSync($0) }))
             }
+            Section(loc("업데이트")) {
+                HStack {
+                    Text(loc("현재 버전"))
+                    Spacer()
+                    Text("v" + state.currentVersion).foregroundStyle(.secondary)
+                }
+                Toggle(loc("하루 한 번 자동 확인"), isOn: $autoUpdateCheck)
+                HStack {
+                    Button(loc("지금 확인")) { state.checkForUpdates(manual: true) }
+                        .disabled(state.updateStatus == .checking)
+                    Spacer()
+                    updateStatusRow
+                }
+            }
             Section("mobius CLI") {
                 HStack {
                     Text(.init(loc("`mobius` 명령어 설치")))
@@ -153,6 +168,29 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 480, height: state.file.accounts.count <= 1 ? 700 : 560)
+    }
+
+    @ViewBuilder private var updateStatusRow: some View {
+        switch state.updateStatus {
+        case .idle:
+            EmptyView()
+        case .checking:
+            HStack(spacing: 6) { ProgressView().controlSize(.small); Text(loc("확인 중…")) }
+                .font(.caption).foregroundStyle(.secondary)
+        case .upToDate:
+            Label(loc("최신 버전입니다"), systemImage: "checkmark.circle.fill")
+                .font(.caption).foregroundStyle(.green)
+        case .available(let info):
+            Button {
+                if let url = URL(string: info.url) { NSWorkspace.shared.open(url) }
+            } label: {
+                Label(loc("새 버전 v%@ 받기", info.version), systemImage: "arrow.down.circle.fill")
+            }
+            .buttonStyle(.borderedProminent).controlSize(.small)
+        case .failed:
+            Text(loc("확인 실패 — 네트워크를 확인해주세요"))
+                .font(.caption).foregroundStyle(.orange)
+        }
     }
 
     private func installCLI() {
