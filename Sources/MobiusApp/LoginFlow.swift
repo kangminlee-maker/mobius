@@ -105,10 +105,14 @@ final class LoginFlowController: NSObject, ASWebAuthenticationPresentationContex
     private func launchLoginAndCaptureURL() async throws -> URL {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        // login shell로 PATH 확보, script(1)로 PTY 할당.
+        // login shell + script(1)로 PTY 할당.
         // exec로 zsh를 script로 교체해 process가 곧 script(1)이 되게 한다
         // (terminate 시 셸만 죽고 script/claude가 고아로 남는 것 방지).
-        proc.arguments = ["-lc", "exec script -q /dev/null claude auth login"]
+        // ★ claude는 절대 경로로 실행한다 — GUI 앱이 띄우는 zsh -lc(비대화형)는
+        //   .zshrc를 읽지 않으므로, PATH 추가가 .zshrc에만 있는 환경에선 bare
+        //   `claude`가 command not found로 즉사해 URL 추출이 실패한다(실측).
+        let claudePath = ClaudeCLI.locate()?.path ?? "claude"
+        proc.arguments = ["-lc", "exec script -q /dev/null '\(claudePath)' auth login"]
         var env = ProcessInfo.processInfo.environment
         let files = try makeBrowserHook()
         browserHookFiles = files
@@ -185,22 +189,31 @@ final class LoginFlowController: NSObject, ASWebAuthenticationPresentationContex
         session = s
     }
 
-    /// 가로챈 OAuth authorize URL을 claude.ai의 "계정 선택" 진입 URL로 변환한다.
-    /// 관측된 패턴(계정 전환 링크): `https://claude.ai/login?selectAccount=true&returnTo=<authorize 경로>`
+    /// 가로챈 OAuth authorize URL을 "계정 선택" 진입 URL로 변환한다.
+    /// 관측된 패턴(계정 전환 링크): `https://<host>/login?selectAccount=true&returnTo=<authorize 경로>`
     /// → 기존 세션이 있어도 곧바로 계정 선택 화면이 뜨고, 구글 등 타 사이트 세션은 유지된다.
-    /// (claude.ai 고유 URL 규칙이라 바뀔 수 있음 — 변환 실패 시 원본 URL로 폴백.)
+    /// ★ 경로 매핑(실측, claude 2.1.207): CLI가 주는 `claude.com/cai/<경로>`는
+    ///   `claude.ai/<경로>`로 307 포워딩되는 별칭일 뿐이고, login 페이지는 claude.ai에
+    ///   살며 returnTo를 claude.ai 기준 상대 경로로 해석한다. 그래서 `/cai` 접두사를
+    ///   벗겨 정식 경로로 만들어야 한다 — 안 벗기면 로그인 후 claude.ai/cai/...로 404.
+    /// (사이트 고유 URL 규칙이라 또 바뀔 수 있음 — 변환 실패 시 원본 URL로 폴백.)
     private func selectAccountURL(_ url: URL) -> URL {
         guard let comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let host = comps.host,
               let query = comps.percentEncodedQuery else { return url }
         // returnTo 값은 authorize 경로+쿼리 전체를 하나의 값으로 완전 인코딩해야 한다
         // (/ ? = & 까지 %2F %3F %3D %26 로). URLQueryItem은 / ? 를 인코딩하지 않아
         // claude.ai가 returnTo를 "/oauth/authorize"까지만 읽고 파라미터를 버렸다(실측 버그).
         var allowed = CharacterSet.alphanumerics
         allowed.insert(charactersIn: "-._~")   // RFC 3986 unreserved만 그대로 둔다
-        let returnToRaw = "/oauth/authorize?" + query
+        var authorizePath = comps.percentEncodedPath
+        if authorizePath.hasPrefix("/cai/") {
+            authorizePath = String(authorizePath.dropFirst("/cai".count))
+        }
+        let returnToRaw = authorizePath + "?" + query
         guard let returnTo = returnToRaw.addingPercentEncoding(withAllowedCharacters: allowed)
         else { return url }
-        return URL(string: "https://claude.ai/login?selectAccount=true&returnTo=\(returnTo)") ?? url
+        return URL(string: "https://\(host)/login?selectAccount=true&returnTo=\(returnTo)") ?? url
     }
 
     private func cleanup() {
