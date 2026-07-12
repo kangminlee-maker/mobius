@@ -1,7 +1,9 @@
-# Mobius (뫼비우스) — Claude 계정 매니저
+# Mobius (뫼비우스) — Claude·Codex 계정 매니저
 
-Claude Code CLI + Claude Desktop 계정을 전환/자동 fallback 하는 macOS 메뉴바 앱 + `mobius` CLI.
-Swift Package (SwiftUI, macOS 14+). primary 소진 → fallback 자동 전환 → primary 회복 시 자동 복귀.
+Claude Code CLI + Claude Desktop + OpenAI Codex CLI 계정을 전환/자동 전환 하는
+macOS 메뉴바 앱 + `mobius` CLI. Swift Package (SwiftUI, macOS 14+).
+프로바이더(claude/codex)별 독립 풀 — 각 풀에서 primary 소진 → fallback 자동 전환 →
+primary 회복 시 자동 복귀. 사용자 노출 용어는 '자동 전환'(구 '자동 fallback').
 
 > **이 파일은 항상 최신 상태로 유지한다.** 구조·핵심 사실·실패 기록이 바뀌면 같은 커밋에서 갱신할 것.
 
@@ -20,16 +22,25 @@ Scripts/setup-signing.sh      # (1회) 고정 서명 인증서 생성 — 아래
 
 ```
 Sources/MobiusCore/       앱·CLI 공유 코어 (전부 의존성 주입 → 테스트 가능)
-  MobiusEnvironment.swift  모든 경로 컨테이너 (MOBIUS_HOME 오버라이드)
-  Models.swift             AccountProfile / AccountsFile / CredentialsSnapshot / RateLimitInfo
+  MobiusEnvironment.swift  모든 경로 컨테이너 (MOBIUS_HOME/CODEX_HOME 오버라이드)
+  Models.swift             Provider / AccountProfile / AccountsFile(프로바이더별 풀) / RateLimitInfo
+  ProviderConfigIO.swift   프로바이더 어댑터 프로토콜 (secret data = 프로바이더 정의 바이트)
   KeychainClient.swift     SystemKeychain + InMemoryKeychain(테스트)
   ClaudeConfigIO.swift     Claude 자격증명 읽기/쓰기 (★ 아래 '진실의 원천' 필독)
-  AccountStore.swift       프로필 영속(accounts.json) + 비밀 스냅샷(0600 파일)
-  Switcher.swift           전환/되저장/롤백/reconcile/adopt (★ liveIsStable 게이팅)
-  RateLimitParser.swift    세션 로그 rate-limit 이벤트 파서 (실측 기반)
-  SessionLogWatcher.swift  ~/.claude/projects tail (네트워크 0)
-  AutoSwitchEngine.swift   순수 상태머신 (쿨다운/마진/autoSwitchedFromPrimary)
-  UsageFetcher.swift       usage 엔드포인트 조회 (게이지용, 팝오버 열 때만)
+  AccountStore.swift       프로필 영속(accounts.json) + 비밀 스냅샷(0600 파일, opaque Data)
+  CodexConfigIO.swift      Codex 자격증명 읽기/쓰기 (auth.json 통째 스왑, JWT 신원)
+  Switcher.swift           전환/되저장/롤백/reconcile/adopt — 등록된 어댑터 풀 전체에 적용
+  RateLimitParser.swift    Claude 세션 로그 rate-limit 이벤트 파서 (실측 기반)
+  CodexRateLimitParser.swift Codex rate_limits 상태 파서 (매 턴 in-band, 게이지+소진 판정)
+  CodexStatusRouter.swift  Codex 상태의 계정 귀속 — 전환 전 세션 파일 격리 (오염 방지 ★아래)
+  SessionLogWatcher.swift  세션 로그 tail — (루트, 파서, 정책) 주입 제네릭 (네트워크 0)
+  AutoSwitchEngine.swift   순수 상태머신, 풀당 1인스턴스 (쿨다운/마진/autoSwitchedFromPrimary,
+                           on/off는 풀별 autoSwitchByProvider — 기록 없는 풀은 켬; 모델스코프 pin)
+  ResetProber.swift        리셋 프로브 판단부 — 소진→리셋 지난 계정 선별, 창당 1회/백오프
+  ResetProbe.swift         프로브 실행기 — Claude(최소 API 호출+usage 폴링) / Codex(exec --json
+                           → thread_id로 rollout 파일 직접 파싱, 활성 계정 전용)
+  UsageFetcher.swift       Claude usage 엔드포인트 조회 (게이지용, 팝오버 열 때만; Codex는 로그로 대체)
+                           모델 스코프 주간 한도(weekly_scoped)도 파싱 → ScopedUsageLimit
   SyncEngine.swift         멀티 Mac 동기화 (클라우드 폴더 미러, ★ 아래 '동기화 원칙')
   UpdateChecker.swift      GitHub 릴리스 업데이트 확인 (하루 1회)
 Sources/mobius/           CLI (list/switch/status/capture/auto)
@@ -52,6 +63,47 @@ Sources/MobiusApp/        SwiftUI 메뉴바 앱 + AppState + Views/ + LoginFlow 
   `seven_day.{...}` (utilization=백분율, resets_at=ISO8601 마이크로초).
 - 게이지는 **팝오버 열 때만** 조회(캐시 4분). 상시 폴링 없음 → 계정 리스크 최소화.
 
+### Codex (OpenAI codex CLI) — 실측 2026-07-12, codex-cli 0.144.1
+- **자격증명은 `~/.codex/auth.json` 단일 파일(0600)이 유일** — Keychain 무관(승인창 이슈 없음).
+  `auth_mode`/`tokens{id_token,access_token,refresh_token,account_id}`/`last_refresh`/`OPENAI_API_KEY`.
+  `.codex-global-state.json`은 데스크톱 앱(Electron) UI 상태로 자격증명과 무관.
+- **신원은 tokens.id_token(JWT) payload에서 로컬 추출**: `email`,
+  `https://api.openai.com/auth`.chatgpt_plan_type. 서명 검증 불필요(표시용).
+- ★ **auth.json은 바쁜 파일** — 실행 중인 codex 세션들이 토큰 리프레시로 수시로 다시 쓴다
+  (활성 세션 7개 상태에서 갱신 실측). mtime 신호 금지 — 값 이중 읽기로 안정성 판정.
+- **사용량이 세션 로그에 매 턴 in-band 포함**: `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`의
+  `event_msg`/`token_count` 이벤트마다 `rate_limits{primary{used_percent,window_minutes:300,
+  resets_at(epoch초)}, secondary{...,10080}, plan_type, rate_limit_reached_type(평시 null)}`.
+  → 게이지도 네트워크 0으로 로그에서 얻는다 (Claude와 달리 usage 엔드포인트 불필요).
+- **소진 판정은 이중화**: `rate_limit_reached_type != null`(값 형태 미실측 — 실소진 미관찰)
+  **또는** `used_percent >= 100`. 리셋은 소진 창들 중 가장 늦은 resets_at.
+- ★ **로그에 계정 식별자가 없다**(session_meta에도 없음, 생성 시 1회만 기록 — 실측).
+  실행 중 codex 프로세스는 시작 시점 토큰을 계속 쓰므로, 전환 후에도 구 세션이 이전
+  계정의 사용량(100% 포함)을 매 턴 남긴다 → 스캔 시점 활성 계정에 단순 귀속하면
+  새 계정이 오염돼 연쇄 전환(B→C→D)이 난다. → `CodexStatusRouter`: 활성 변경 시점까지
+  관찰된 파일은 격리(그 파일의 이후 상태 무시), 전환 후 새 파일만 현재 활성에 귀속.
+  한계(보수적 선택): 전환 전 세션을 resume하면 그 파일 신호는 계속 무시되고(새 세션이
+  시작되면 자연 복구), 앱 재시작 시 격리 상태는 초기화된다.
+- 활성 codex 계정이 이미 한도 기록 중이면 추가 소진 상태는 처리하지 않는다 —
+  매 턴 상태가 오므로 이 가드가 없으면 15초마다 알림·엔진 호출이 반복된다(알림 폭풍).
+- ★ **`codex resume`는 며칠 지난 원본 rollout 파일에 이어 쓴다**(실측: 7/8 파일이 7/12 갱신).
+  세션 로그가 수만 개(실측 46K, 18GB)라 Claude식 전체 프라이밍 불가 →
+  SessionLogWatcher **tailOnly 정책**: 오래된 미추적 파일 무시, 처음 본 파일은 끝까지 스킵 후
+  append만 파싱, 오래되면 추적 해제. 전체 열거+stat은 0.1s(실측)라 15초 틱에 허용.
+- `codex login status`는 읽기 전용(해시·mtime 불변 실측), 로그인 시 exit 0 — E2E 검증 프리미티브.
+- `codex login`(브라우저 OAuth)·`codex logout` 존재. `CODEX_HOME`으로 루트 오버라이드 가능.
+- ★ **구 계정 세션의 리프레시가 로그인을 되돌린다(클로버)** — B 계정으로 로그인/전환해도,
+  A 토큰을 메모리에 든 실행 중 세션이 토큰을 리프레시하면 auth.json을 A로 다시 쓴다
+  (실측: 22:11 회사 계정 로그인 → 22:14 유휴 n 세션 리프레시가 auth.json을 n으로 되돌림).
+  Mobius는 이를 외부 변경으로 보고 활성을 따라가며(라이브가 진실) 알림을 띄운다.
+  전환을 안착시키려면 이전 계정의 실행 중 codex 세션을 종료해야 한다.
+- ★ **스냅샷 토큰은 회전(rotation)으로 빠르게 실효될 수 있다** — 로그인 수 분 내 회전이
+  일어난 뒤 클로버로 회전본이 유실되면, 스냅샷의 구 refresh token 사용 시 "refresh token
+  was revoked"로 그 계정 재로그인이 필요해진다(실측). Codex 재인증 자동 감지는 미구현.
+- ★ **인증 실패(401/revoked)는 rollout 로그에 안 남는다** — 웹소켓 연결 단계에서 실패해
+  세션 파일 자체가 생성되지 않음(실측). 세션 로그 기반 재인증 감지는 이 에러 클래스에
+  불가능 — 후속 설계는 다른 신호(전환 직후 프로브, exit code 등)가 필요.
+
 ### macOS 26 (Tahoe) 환경
 - 메뉴바 아이콘은 Control Center가 호스팅 — CGWindowList의 layer/owner로 존재 확인이 어려움.
 - **Bartender 같은 메뉴바 관리 앱이 새 앱 아이콘을 자동 숨김** → 안 보이면 Bartender 설정에서 표시.
@@ -60,6 +112,8 @@ Sources/MobiusApp/        SwiftUI 메뉴바 앱 + AppState + Views/ + LoginFlow 
 ### 서명 (Keychain 승인창 영구 방지)
 - ad-hoc 서명(`-s -`)은 **리빌드마다 정체성이 바뀌어** "항상 허용"이 매번 리셋됨.
 - `Scripts/setup-signing.sh`로 고정 인증서 `Mobius Dev Signing` 생성 → make-app.sh가 자동 사용.
+- 정식 인증서(Apple Developer 등)가 이미 있으면 `MOBIUS_SIGN_IDENTITY="<인증서 이름>"
+  Scripts/make-app.sh`로 지정 — setup-signing.sh 불필요, 우선순위는 환경변수 > 고정 인증서 > ad-hoc.
 - 고정 서명 + 아래 '비밀은 파일' 조합으로 승인창이 사실상 사라짐.
 
 ### Desktop 내장 Claude Code가 `security` CLI로 CLI 자격증명을 읽는다 (파티션 리스트)
@@ -190,6 +244,17 @@ Sources/MobiusApp/        SwiftUI 메뉴바 앱 + AppState + Views/ + LoginFlow 
     하위호환 디코딩 + 마이그레이션 테스트를 동반한다. (2) "빈 폴백 후 저장"은 조용한
     데이터 파괴 경로다 — 로드 실패 시 원본을 먼저 지켜라. (3) 개발자는 잦은 빌드로 이 경로를
     바로 밟지만, **업데이트만 하는 사용자에게 그대로 터진다** — 릴리스 전 구파일 로드 필수 확인.
+14. **"계정 추가"가 앱에서만 실패, 터미널 재현은 통과하는 착시** — GUI 앱이 띄우는
+    `zsh -lc`(비대화형 로그인 셸)는 `.zshrc`를 읽지 않으므로, claude의 PATH 추가가
+    `.zshrc`에만 있는 환경(예: `~/.local/bin`)에선 bare `claude`가 command not found로
+    즉사 → "로그인 URL을 얻지 못했습니다". 개발자 터미널 재현은 사용자 셸 PATH를
+    물려받아 통과해버린다. → LoginFlow는 `ClaudeCLI.locate()` 절대 경로로 실행.
+    앱 조건 재현은 `env -i HOME=... PATH=/usr/bin:/bin:... /bin/zsh -lc ...`로 할 것.
+15. **claude 2.1.207의 authorize URL은 별칭 — returnTo에 `/cai`를 실으면 로그인 후 404** —
+    CLI가 브라우저로 여는 `claude.com/cai/oauth/authorize`는 `claude.ai/oauth/authorize`로
+    307 포워딩되는 별칭이다(쿼리 보존, curl 실측). login 페이지는 claude.ai에 살고
+    returnTo를 claude.ai 기준 상대 경로로 해석하므로, selectAccountURL()은 `/cai`
+    접두사를 벗겨 정식 경로로 매핑해야 한다 (안 벗기면 claude.ai/cai/… 404, 실측).
 
 ## QA / 진행 상황
 
@@ -199,6 +264,43 @@ Sources/MobiusApp/        SwiftUI 메뉴바 앱 + AppState + Views/ + LoginFlow 
 - needsReauth 자동 감지 배선됨(2026-07-11): usage 조회 401/403 + **저장된 expiresAt(13자리
   epoch ms, 실측)이 아직 유효할 때만** 마킹(만료 토큰 401은 오탐이라 제외), 200이면 자가 해제.
   복구는 카드 '다시 로그인' 버튼 → 기존 로그인 플로우 재사용(같은 이메일 = 토큰 갱신+해제).
-  세션 로그 기반 인증 에러 감지는 실측 포맷 확보 전이라 미구현(후속).
-- 후속 후보: accounts.json 파일 락, 세션 로그 기반 인증 에러 감지.
+  세션 로그 기반 인증 에러 감지는 실측 포맷 확보 전이라 미구현(후속). **Claude 전용** —
+  Codex는 재로그인 감지 경로가 아직 없다(카드 '다시 로그인'도 미노출).
+- **Codex 지원 구현됨(2026-07-12, A안: 기존 개념 확장 + 프로바이더 어댑터)**:
+  프로바이더별 풀(AccountsFile v2 — 구 v1 파일은 Claude 풀로 무손실 흡수, 저장은 첫 변경 때
+  v2로 전환), Codex 어댑터/파서/감시, 앱 섹션 UI + CLI `--provider`, 유닛/통합 테스트 92개 green.
+  계정 등록은 adopt 방식: `codex logout && codex login`하면 앱 틱이 자동 등록.
+  **남은 게이트**: ① auth.json 스왑 실험(실행 중 codex 세션 없는 조용한 시점에 이동→status→복원)
+  — 전환 E2E 전 필수, ② 실소진 이벤트 미관찰(rate_limit_reached_type 값 형태 — 첫 실소진 때
+  fixture 확보해 파서 테스트 보강), ③ 2번째 codex 계정 등록 후 실전환 검증.
+  ★ **혼합 버전 주의**: v2 accounts.json을 구버전 앱/CLI가 읽으면 활성 계정이 없어 보이고,
+  구버전 UI에서 codex 프로필을 claude 경로로 전환할 수 있다(자격증명 오염 위험) —
+  **새 코드로 변경(mutation)하기 전에 /Applications/Mobius.app과 CLI를 새 빌드로 교체할 것.**
+- **설정 UI 재구성 + 자동 전환 풀별 분리(2026-07-12,
+  `docs/design/settings-ui-restructure-prep.md` R1~R6 구현)**: autoSwitchEnabled(전역) →
+  `autoSwitchByProvider`(풀별, 구 키는 디코드 시 양쪽 풀 적용 + encode 시 Claude 값 병행
+  기록), 엔진/스토어/CLI(`mobius auto --provider`, 미지정 시 양쪽)/앱 전부 풀별 배선.
+  설정 Form: 일반(언어/자동시작/게이지/mobius CLI pill 행) → 설치 현황(Claude·Codex CLI
+  블록에 자동 전환 토글 + 등록 계정 요약 + 계정 추가) → Experimental(Desktop 토글 2개, 최하단).
+  메뉴바: 헤더 전역 토글·info popover·footer 계정 추가 제거(설정으로 일원화), ⚙/전원 히트
+  타깃 28pt. 용어 '자동 fallback' → '자동 전환'(계정 역할명 primary/fallback은 유지).
+  테스트 103개 green.
+- **리셋 프로브 구현됨(2026-07-13, 설계·게이트 실측은 2026-07-12
+  `docs/design/reset-probe-prep.md`)**: 소진→리셋된 계정의 5h 창은 첫 호출 전까지 다음
+  리셋 미정(실측: 유휴 시 resets_at null, GET은 창을 안 시작; Codex도 동일 의미론).
+  리셋 도래 시 최소 호출 1회로 창 확정 + rateLimit 해제 + 알림("다음 초기화 HH:mm").
+  Experimental 전역 토글 `resetProbeEnabled`(기본 끔). Claude: /v1/messages가 시스템
+  프롬프트 없이 OAuth 수락(haiku-4-5, max_tokens 1; usage 반영 지연 15~30초 → 폴링,
+  리셋 시각 10분 그리드 스냅), 비활성 계정도 가능·만료 토큰은 스킵(리프레시 금지).
+  Codex: 활성 계정만, `codex exec --json`의 thread_id로 rollout 파일 특정해 직접 파싱
+  (워처 tailOnly가 일회성 턴을 놓치므로). 유닛 11개 추가(총 114 green).
+  미검증 잔여: 실제 리셋 이벤트로 tick 전체 경로 라이브 관측(기능 켠 뒤 첫 소진→리셋 때).
+- **P3(monthly spend limit) 오탐 수정(2026-07-13)**: 이 이벤트는 extra usage 크레딧
+  월 한도라 플랜 창이 여유여도 뜬다(실측 — 24h 폴백 기록이 멀쩡한 계정 3개를 하루 종일
+  소진으로 오표시). 창 소진과 겹치면 이 메시지가 P1/P2를 가리므로(사용자 확인),
+  파서는 `RateLimitHit.kind=monthlySpend`로 구분만 하고 앱이 usage로 5h/주간을 교차
+  확인해 진짜 소진만 실제 리셋 시각으로 기록(`UsageSnapshot.exhaustionHit` — Codex와
+  동일 의미론). 정정 기록: `docs/spike/rate-limit-format.md`.
+- 후속 후보: accounts.json 파일 락, 세션 로그 기반 인증 에러 감지, Codex 재로그인 감지,
+  usage `limits[]`의 모델 스코프 주간 한도(weekly_scoped) 게이지 노출.
 - 2차 프로젝트(합의): 멀티 PC ~/.claude 세션 동기화 — 자격증명 제외, 별도 스펙.

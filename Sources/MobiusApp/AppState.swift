@@ -40,9 +40,16 @@ final class AppState: ObservableObject {
     let env: MobiusEnvironment
     let store: AccountStore
     let io: ClaudeConfigIO
+    let codexIO: CodexConfigIO
     let switcher: Switcher
-    let watcher: SessionLogWatcher
-    let engine = AutoSwitchEngine()
+    let watcher: SessionLogWatcher<RateLimitHit>              // Claude 세션 로그
+    let codexWatcher: SessionLogWatcher<CodexRateLimitStatus> // Codex 세션 로그
+    let codexRouter = CodexStatusRouter() // 전환 전 세션 파일 격리 (계정 오귀속 방지)
+    let engines: [Provider: AutoSwitchEngine] = [
+        .claude: AutoSwitchEngine(provider: .claude),
+        .codex: AutoSwitchEngine(provider: .codex),
+    ]
+    let resetProber = ResetProber() // 리셋 프로브 판단부 (창당 1회/백오프)
     lazy var desktopSwitcher = DesktopSwitcher(env: env)
     lazy var desktopCoordinator = DesktopCoordinator(switcher: desktopSwitcher)
     private var timer: Timer?
@@ -67,8 +74,11 @@ final class AppState: ObservableObject {
         }
         self.store = store
         self.io = ClaudeConfigIO(env: env, keychain: kc)
-        self.switcher = Switcher(env: env, keychain: kc, store: store, io: io)
+        self.codexIO = CodexConfigIO(env: env)
+        self.switcher = Switcher(env: env, keychain: kc, store: store, io: io,
+                                 extraIOs: [codexIO])
         self.watcher = SessionLogWatcher(env: env)
+        self.codexWatcher = SessionLogWatcher.codex(env: env)
         self.file = store.file
         self.lastError = initError
 
@@ -108,10 +118,12 @@ final class AppState: ObservableObject {
                 || UserDefaults.standard.bool(forKey: "showUsageGauges") else { return }
         guard usageTask == nil else { return }
         let now = Date()
+        // Claude만 — Codex 게이지는 세션 로그에서 얻는다 (tick의 processCodexBatches).
         // needsReauth 계정도 계속 조회한다 — CLI에서 직접 `claude auth login`으로 복구하는
         // 경우, 조회가 200이면 그 복구를 감지해 needsReauth를 자동으로 푼다(아래 성공 경로).
         // 여전히 401이면 `!profile.needsReauth` 가드가 재알림을 막으므로 스팸은 없다.
         let stale = store.file.accounts.filter {
+            $0.provider == .claude &&
             (usage[$0.id]?.fetchedAt ?? .distantPast) < now.addingTimeInterval(-usageStaleness)
         }
         guard !stale.isEmpty else { return }
@@ -295,14 +307,21 @@ final class AppState: ObservableObject {
 
     var menuStatus: MenuStatus {
         let now = Date()
-        guard let active = file.active else { return .unknown }
-        // 주계정에 머무는 중이면 주계정 색을 우선한다 — 사용자가 직접 주계정을 선택했을 때
-        // (Fable 등 일부 한도만 소진돼도) 알람색으로 보이지 않게. 실측 피드백 반영.
-        if active.id == file.primary?.id { return .primaryActive }
-        // fallback 활성 중: 갈 곳이 모두 소진/재로그인이면 allExhausted, 아니면 fallback.
-        if file.accounts.allSatisfy({ $0.isLimited(now: now) || $0.needsReauth }),
-           !file.accounts.isEmpty { return .allExhausted }
-        return .fallbackActive
+        let pools = Provider.allCases.filter { !file.accounts(of: $0).isEmpty }
+        guard pools.contains(where: { file.active(of: $0) != nil }) else { return .unknown }
+        func poolExhausted(_ provider: Provider) -> Bool {
+            file.accounts(of: provider).allSatisfy { $0.isLimited(now: now) || $0.needsReauth }
+        }
+        // 빨강 = 모든 풀이 막혀 어디서도 작업 불가.
+        if pools.allSatisfy(poolExhausted) { return .allExhausted }
+        // 주계정에 머무는 중인 풀은 알람색 아님 — 사용자가 직접 주계정을 선택했을 때
+        // (Fable 등 일부 한도만 소진돼도) 알람색으로 보이지 않게(upstream 293a911 반영).
+        // 어떤 풀이든 fallback에 활성이면 주황. (진짜 소진이면 자가복구가 fallback으로 옮긴다.)
+        if pools.contains(where: { provider in
+            guard let active = file.active(of: provider) else { return false }
+            return active.id != file.primary(of: provider)?.id
+        }) { return .fallbackActive }
+        return .primaryActive
     }
 
     // MARK: 주기 처리
@@ -321,8 +340,19 @@ final class AppState: ObservableObject {
         // 라이브와 어긋나면 UI가 /status와 달라지는 더 나쁜 버그가 된다(유예는 넣지 않는다).
         if now.timeIntervalSince(lastReconcileAt) >= Self.reconcileInterval {
             lastReconcileAt = now
+            let activeBefore = store.file.activeByProvider
             try? await switcher.adoptLiveAccountIfUnregistered()
             try? await switcher.reconcile()
+            // 외부 요인(재로그인, 또는 구 세션의 토큰 리프레시가 자격증명 파일을 되돌리는
+            // 클로버 — Codex 실측)으로 활성이 바뀌면 조용히 넘어가지 않고 알린다.
+            for provider in Provider.allCases {
+                let after = store.file.activeByProvider[provider]
+                guard activeBefore[provider] != after, activeBefore[provider] != nil,
+                      let name = store.file.accounts.first(where: { $0.id == after })?.nickname
+                else { continue }
+                notify(title: loc("%@ 활성 계정이 밖에서 바뀌었어요", provider.displayName),
+                       body: loc("외부 로그인 또는 실행 중 세션의 갱신으로 활성 계정이 %@(으)로 바뀌었습니다. 카드를 눌러 되돌릴 수 있어요.", name))
+            }
         }
         // 활성 계정 스냅샷을 5분마다 라이브(갱신된 토큰)와 동기화 — 오래 쓰다 크래시해도
         // 스냅샷이 낡지 않게. reconcile은 활성 불변 시 되저장을 건너뛰므로 이 보강이 그 틈을 메운다.
@@ -331,45 +361,225 @@ final class AppState: ObservableObject {
             await switcher.refreshActiveSnapshotIfStable()
         }
 
+        // 로그 스캔은 메인 액터 밖에서 — Codex 세션 루트는 파일이 수만 개라
+        // 열거+stat(실측 ~0.1s)가 UI를 막지 않게 한다. 워처는 자체 락으로 안전.
+        let claudeWatcher = watcher, codexWatcher = self.codexWatcher
+        let (claudeHits, codexBatches) = await Task.detached(priority: .utility) {
+            (claudeWatcher.scan(now: now), codexWatcher.scanBatches(now: now))
+        }.value
+
+        // Claude: 세션 로그의 rate-limit 에러 이벤트.
         // 배치 내 모든 hit는 스캔 시점의 활성 계정에 귀속 —
         // 루프 중 전환이 일어나도 남은 hit(구 세션 로그)가 새 활성 계정에 오기록되지 않도록.
-        let activeID = store.file.activeAccountID
-        let hits = watcher.scan(now: now)
-        // 주의: 인증 만료(authentication_failed) 로그는 "어느 계정" 것인지 적혀 있지 않다.
-        // 활성 계정에 갖다 붙이면 전환 직후 등에 엉뚱한 계정이 마킹된다(실측 오귀인).
-        // → needsReauth는 로그가 아니라 usage API 401(계정별 토큰으로 조회 → 오귀인 불가)로만
-        //   판정한다. refreshUsageIfStale() 참조.
-        for hit in hits {
-            if let activeID {
-                try? store.update(activeID) {
-                    $0.rateLimit = RateLimitInfo(resetsAt: hit.effectiveResetsAt(now: now),
-                                                 recordedAt: now, modelScoped: hit.modelScoped)
-                }
-            }
-            apply(engine.onRateLimitHit(file: store.file, hit: hit, now: now), now: now)
+        // 주의(upstream 293a911): 인증 만료(authentication_failed) 로그는 "어느 계정" 것인지
+        // 적혀 있지 않아 활성 계정에 오귀인된다 → needsReauth는 로그가 아니라 usage API 401
+        // (계정별 토큰으로 조회 → 오귀인 불가)로만 판정한다(refreshUsageIfStale 참조).
+        // 여기서는 rate-limit(창 소진)만 처리한다.
+        let claudeActiveID = store.file.activeByProvider[.claude]
+        var sawMonthlySpend = false
+        for hit in claudeHits {
+            // 월간 지출 한도(P3)는 창 소진이 아니다 — 기록하면 24h 폴백 오탐이 된다
+            // (2026-07-13 실측: 플랜 창 여유 상태에서도 뜨고 세션은 정상 동작).
+            // 단 창 소진과 겹치면 이 메시지가 우선 표시돼 창 소진을 가리므로 usage로 교차 확인.
+            guard hit.kind == .window else { sawMonthlySpend = true; continue }
+            recordHit(hit, on: claudeActiveID, now: now)
+            apply(engines[.claude]!.onRateLimitHit(file: store.file, hit: hit, now: now),
+                  provider: .claude, now: now)
         }
-        apply(engine.onTick(file: store.file, now: now), now: now)
+        if sawMonthlySpend { verifyWindowsAfterSpendLimit(accountID: claudeActiveID, now: now) }
+
+        // Codex: 매 턴 실리는 rate_limits 상태 — 라우터가 전환 전 세션 파일을 걸러낸 뒤
+        // 게이지 갱신 + 소진 판정 (네트워크 0)
+        processCodexBatches(codexBatches, now: now)
+
+        for provider in Provider.allCases {
+            apply(engines[provider]!.onTick(file: store.file, now: now),
+                  provider: provider, now: now)
+        }
+        runResetProbeIfDue(now: now)
         file = store.file
     }
 
-    private func apply(_ decision: Decision, now: Date) {
+    // MARK: 리셋 프로브 — 소진→리셋된 계정의 창을 최소 호출로 확정 (experimental)
+    // 설계·실측: docs/design/reset-probe-prep.md
+
+    private var resetProbeTask: Task<Void, Never>?
+    /// codex 바이너리 탐색(로그인 셸, 수백 ms)은 최초 1회만 — 결과 캐시
+    private var codexProbeBinary: String??
+
+    private func runResetProbeIfDue(now: Date) {
+        guard resetProbeTask == nil else { return } // 동시 프로브 1건
+        let due = resetProber.due(file: store.file, now: now)
+        // Codex는 활성 계정만 프로브 가능 (비활성 계정 턴 실행은 토큰 회전 위험 — v1 제외).
+        // 비활성 codex 계정은 시도 소모 없이 대기 — 활성이 되면(자동 복귀 등) 그때 프로브.
+        guard let target = due.first(where: { p in
+            p.provider == .claude || p.id == store.file.activeByProvider[.codex]
+        }), let resetsAt = target.rateLimit?.resetsAt else { return }
+        resetProbeTask = Task { @MainActor [weak self] in
+            defer { self?.resetProbeTask = nil }
+            await self?.runResetProbe(target, resetsAt: resetsAt)
+        }
+    }
+
+    private func runResetProbe(_ target: AccountProfile, resetsAt: Date) async {
+        do {
+            let outcome: ResetProbeOutcome
+            switch target.provider {
+            case .claude:
+                guard let secret = try? store.secret(for: target.id) else {
+                    resetProber.noteGiveUp(target.id, resetsAt: resetsAt)
+                    return
+                }
+                let blob = secret.keychainBlob
+                outcome = try await Task.detached(priority: .utility) {
+                    try await ClaudeResetProbe.execute(keychainBlob: blob)
+                }.value
+            case .codex:
+                if codexProbeBinary == nil {
+                    codexProbeBinary = await Task.detached(priority: .utility) {
+                        ToolInventory.locateCodexCLI()?.path
+                    }.value
+                }
+                guard let binary = codexProbeBinary ?? nil else {
+                    resetProber.noteGiveUp(target.id, resetsAt: resetsAt) // CLI 없음 — 재시도 무의미
+                    return
+                }
+                let probe = CodexResetProbe(binaryPath: binary, sessionsDir: env.codexSessionsDir)
+                outcome = try await Task.detached(priority: .utility) {
+                    try await probe.execute()
+                }.value
+            }
+            handleProbeOutcome(outcome, target: target, resetsAt: resetsAt)
+        } catch {
+            // 재시도 대상 실패(네트워크/exec) — 시도 소진 시에만 사용자에게 알린다
+            if resetProber.noteFailure(target.id, resetsAt: resetsAt, now: Date()) {
+                notify(title: loc("%@ 한도 초기화됨", target.nickname),
+                       body: loc("초기화 시점을 확정하지 못했어요 — 다음 사용 시 5시간 창이 시작됩니다."))
+            }
+        }
+    }
+
+    private func handleProbeOutcome(_ outcome: ResetProbeOutcome,
+                                    target: AccountProfile, resetsAt: Date) {
+        switch outcome {
+        case let .pinned(snap):
+            resetProber.noteSuccess(target.id, resetsAt: resetsAt)
+            usage[target.id] = snap
+            clearStaleRateLimit(target.id)
+            let time = snap.fiveHourResetsAt.map { Self.probeTimeFormatter.string(from: $0) } ?? "?"
+            notify(title: loc("%@ 한도 초기화됨", target.nickname),
+                   body: loc("다음 초기화: %@", time))
+        case .unconfirmed:
+            // 최소 호출은 성공 = 창은 시작됨. 시각 확인만 실패 — 재호출하지 않는다.
+            resetProber.noteSuccess(target.id, resetsAt: resetsAt)
+            clearStaleRateLimit(target.id)
+            notify(title: loc("%@ 한도 초기화됨", target.nickname),
+                   body: loc("다음 초기화 시점 확인에 실패했어요 — 게이지가 곧 갱신됩니다."))
+        case .tokenExpired, .unauthorized:
+            resetProber.noteGiveUp(target.id, resetsAt: resetsAt)
+            notify(title: loc("%@ 한도 초기화됨", target.nickname),
+                   body: loc("초기화 시점을 확정하지 못했어요 — 다음 사용 시 5시간 창이 시작됩니다."))
+        }
+    }
+
+    /// 프로브가 창 시작을 확인했으면 낡은 소진 기록은 진실이 아니다 — 해제해 카드
+    /// 카운트다운을 걷어내고, 재시작 후 재프로브 트리거도 자연 소멸시킨다.
+    private func clearStaleRateLimit(_ id: UUID) {
+        try? store.update(id) { $0.rateLimit = nil }
+        MobiusNotification.postAccountsChanged()
+        reload()
+    }
+
+    private static let probeTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .none
+        f.timeStyle = .short
+        return f
+    }()
+
+    private func recordHit(_ hit: RateLimitHit, on accountID: UUID?, now: Date) {
+        guard let accountID else { return }
+        try? store.update(accountID) {
+            $0.rateLimit = RateLimitInfo(resetsAt: hit.effectiveResetsAt(now: now),
+                                         recordedAt: now, modelScoped: hit.modelScoped)
+        }
+    }
+
+    /// 월간 지출 한도(P3) 이벤트의 교차 확인 — usage로 5h/주간 창 현황을 봐서
+    /// 진짜 창 소진이면 실제 리셋 시각으로 기록하고, 여유면 무시한다.
+    /// P3는 짧은 폭주로 온다(실측: 30초에 15개 세션 파일) — 캐시 우선 + 단일 인플라이트로
+    /// 네트워크 호출을 억제하고, 이미 소진 기록이 있으면 건너뛴다.
+    private var spendVerifyTask: Task<Void, Never>?
+
+    private func verifyWindowsAfterSpendLimit(accountID: UUID?, now: Date) {
+        guard let accountID, spendVerifyTask == nil else { return }
+        guard let account = store.file.accounts.first(where: { $0.id == accountID }),
+              !account.isLimited(now: now) else { return }
+        // 신선한 캐시가 있으면 네트워크 없이 판단
+        if let cached = usage[accountID], now.timeIntervalSince(cached.fetchedAt) < usageStaleness {
+            applyVerifiedExhaustion(cached, accountID: accountID, now: now)
+            return
+        }
+        guard let secret = try? store.secret(for: accountID) else { return }
+        spendVerifyTask = Task { @MainActor in
+            defer { spendVerifyTask = nil }
+            guard let snap = try? await UsageFetcher.fetch(keychainBlob: secret.keychainBlob)
+            else { return }
+            usage[accountID] = snap
+            applyVerifiedExhaustion(snap, accountID: accountID, now: Date())
+        }
+    }
+
+    private func applyVerifiedExhaustion(_ snap: UsageSnapshot, accountID: UUID, now: Date) {
+        guard let hit = snap.exhaustionHit(now: now) else { return } // 창 여유 — 크레딧 한도만
+        recordHit(hit, on: accountID, now: now)
+        apply(engines[.claude]!.onRateLimitHit(file: store.file, hit: hit, now: now),
+              provider: .claude, now: now)
+        file = store.file
+    }
+
+    private func processCodexBatches(_ batches: [SessionLogWatcher<CodexRateLimitStatus>.Batch],
+                                     now: Date) {
+        // 라우터는 활성 변경 감지를 겸하므로 배치가 비어도 매 틱 호출한다
+        // (CLI/외부 전환도 다음 틱에 격리가 반영되도록).
+        let codexActiveID = store.file.activeByProvider[.codex]
+        let routed = codexRouter.route(batches: batches,
+                                       trackedFiles: codexWatcher.trackedFiles,
+                                       activeID: codexActiveID)
+        guard let codexActiveID else { return }
+        if let latest = routed.latestUsage {
+            usage[codexActiveID] = latest.usageSnapshot(fetchedAt: now)
+        }
+        for hit in routed.exhaustionHits {
+            // 이미 한도 기록이 있으면 중복 처리하지 않는다 — codex는 매 턴 상태를 남기므로
+            // 이 가드가 없으면 15초마다 알림·엔진 호출이 반복된다 (알림 폭풍).
+            let active = store.file.accounts.first { $0.id == codexActiveID }
+            guard let active, !active.isLimited(now: now) else { break }
+            recordHit(hit, on: codexActiveID, now: now)
+            apply(engines[.codex]!.onRateLimitHit(file: store.file, hit: hit, now: now),
+                  provider: .codex, now: now)
+        }
+    }
+
+    private func apply(_ decision: Decision, provider: Provider, now: Date) {
         switch decision {
         case .none: break
         case .allExhausted:
-            notify(title: loc("모든 계정 한도 소진"),
+            notify(title: loc("%@ 모든 계정 한도 소진", provider.displayName),
                    body: loc("전환 가능한 계정이 없습니다. 리셋을 기다려주세요."))
         case let .notifyExhaustedOnly(id):
             let name = store.file.accounts.first { $0.id == id }?.nickname ?? "?"
             notify(title: loc("한도 소진 — 자동 전환이 꺼져 있습니다"),
                    body: loc("%@ 계정이 한도에 도달했습니다. 수동으로 전환하세요.", name))
         case let .switchTo(id, reason):
-            let fromID = store.file.activeAccountID
+            let fromID = store.file.activeByProvider[provider]
             do {
                 try switcher.switchTo(id)
-                engine.noteSwitched(now: now)
+                engines[provider]?.noteSwitched(now: now)
                 // 자동 전환의 결과인지 기록 — onTick의 primary 복귀는 이 플래그가
                 // true일 때만 일어난다 (수동 전환 자동 회귀 방지)
-                try? store.setAutoSwitchedFromPrimary(reason == .activeExhausted)
+                try? store.setAutoSwitchedFromPrimary(reason == .activeExhausted,
+                                                      provider: provider)
                 MobiusNotification.postAccountsChanged()
                 let name = store.file.accounts.first { $0.id == id }?.nickname ?? "?"
                 let fromName = store.file.accounts.first { $0.id == fromID }?.nickname
@@ -378,15 +588,15 @@ final class AppState: ObservableObject {
                            body: loc("한도가 초기화돼 주 계정으로 돌아왔어요."))
                 } else {
                     notify(title: loc("🔄 %@ 계정으로 전환했어요", name),
-                           body: loc("%@ 한도 소진 → %@. 새로 시작하는 claude 세션부터 적용돼요.",
-                                     fromName ?? "?", name))
+                           body: loc("%@ 한도 소진 → %@. 새로 시작하는 %@ 세션부터 적용돼요.",
+                                     fromName ?? "?", name, provider.rawValue))
                 }
             } catch {
                 lastError = loc("자동 전환 실패: %@", error.localizedDescription)
                 return
             }
-            // Desktop 자동 Fallback: 옵션 켬 + 대상 스냅샷 존재 시에만
-            if store.file.desktopAutoSwitchEnabled {
+            // Desktop 자동 Fallback (Claude 전용): 옵션 켬 + 대상 스냅샷 존재 시에만
+            if provider == .claude, store.file.desktopAutoSwitchEnabled {
                 switchDesktopIfPossible(from: fromID, to: id)
             }
         }
@@ -395,22 +605,23 @@ final class AppState: ObservableObject {
     // MARK: 사용자 액션
 
     func manualSwitch(to id: UUID) {
-        let fromID = store.file.activeAccountID
+        let provider = store.file.accounts.first { $0.id == id }?.provider ?? .claude
+        let fromID = store.file.activeByProvider[provider]
         do {
             try switcher.switchTo(id)
-            engine.noteSwitched()
+            engines[provider]?.noteSwitched()
             // 사용자가 직접 고른 계정 — 모델 전용 한도(Fable 등)로 자동으로 밀어내지 않는다.
             try? store.setUserPinned(id)
             // 사용자의 의지로 전환 — 자동 복귀 대상이 아니다
-            try? store.setAutoSwitchedFromPrimary(false)
+            try? store.setAutoSwitchedFromPrimary(false, provider: provider)
             MobiusNotification.postAccountsChanged()
             reload()
         } catch {
             lastError = loc("전환 실패: %@", error.localizedDescription)
             return
         }
-        // Desktop 동시 전환 (옵션 켜짐 + 대상 스냅샷 존재 시)
-        if store.file.desktopSyncEnabled {
+        // Desktop 동시 전환 (Claude 전용 — 옵션 켜짐 + 대상 스냅샷 존재 시)
+        if provider == .claude, store.file.desktopSyncEnabled {
             switchDesktopIfPossible(from: fromID, to: id)
         }
     }
@@ -480,20 +691,20 @@ final class AppState: ObservableObject {
         }
     }
 
-    func moveFallback(from source: IndexSet, to destination: Int) {
-        // List.onMove는 fallback 섹션(전체 인덱스 1...) 기준으로 변환해 호출한다
+    func moveFallback(provider: Provider, from source: IndexSet, to destination: Int) {
+        // List.onMove는 fallback 섹션(풀 내 인덱스 1...) 기준으로 변환해 호출한다
         guard let src = source.first else { return }
         let from = src + 1
         var to = destination + 1
         if to > from { to -= 1 }
         guard from != to else { return }
-        try? store.moveFallback(fromIndex: from, toIndex: to)
+        try? store.moveFallback(provider: provider, fromIndex: from, toIndex: to)
         MobiusNotification.postAccountsChanged()
         reload()
     }
 
-    func setAutoSwitch(_ on: Bool) {
-        try? store.setAutoSwitch(on)
+    func setAutoSwitch(_ on: Bool, provider: Provider) {
+        try? store.setAutoSwitch(on, provider: provider)
         MobiusNotification.postAccountsChanged()
         reload()
     }
@@ -506,6 +717,12 @@ final class AppState: ObservableObject {
 
     func setDesktopAutoSwitch(_ on: Bool) {
         try? store.setDesktopAutoSwitch(on)
+        MobiusNotification.postAccountsChanged()
+        reload()
+    }
+
+    func setResetProbe(_ on: Bool) {
+        try? store.setResetProbe(on)
         MobiusNotification.postAccountsChanged()
         reload()
     }
@@ -534,7 +751,7 @@ final class AppState: ObservableObject {
         guard ClaudeCLI.isInstalled else {
             lastError = loc("Claude Code CLI가 필요합니다 — 설정에서 설치하세요.")
             notify(title: loc("Claude Code CLI 필요"),
-                   body: loc("계정을 추가하려면 먼저 Claude Code CLI를 설치하세요. 설정 → Claude Code CLI에서 설치할 수 있어요."))
+                   body: loc("계정을 추가하려면 먼저 Claude Code CLI를 설치하세요. 설정 → 설치 현황에서 설치할 수 있어요."))
             return
         }
         let flow = LoginFlowController(io: io, store: store, switcher: switcher)
