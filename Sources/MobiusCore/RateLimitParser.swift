@@ -2,11 +2,23 @@ import Foundation
 
 /// 세션 로그에서 발견된 "이 계정의" 사용 한도 이벤트.
 public struct RateLimitHit: Equatable, Sendable {
-    /// 리셋 시각. 월간 지출 한도처럼 리셋 시각이 없는 이벤트는 nil —
+    /// 이벤트가 가리키는 한도의 종류.
+    /// - window: 5시간/주간 창 소진 — 그대로 소진 기록 대상.
+    /// - monthlySpend: extra usage 크레딧의 월간 지출 한도(P3) — 창 소진이 아니며
+    ///   플랜 창이 멀쩡해도 뜬다(2026-07-13 실측: 이벤트 후에도 세션 정상 동작).
+    ///   단, 창 소진과 겹치면 이 메시지가 우선 표시돼 창 소진을 가릴 수 있으므로,
+    ///   호출측은 기록 대신 usage로 5h/주간 현황을 교차 확인해 판단한다.
+    public enum Kind: Equatable, Sendable { case window, monthlySpend }
+
+    /// 리셋 시각. 시각을 못 읽는 창 소진 변형(P5)은 nil —
     /// 호출측(AppState/CLI)이 보수적 폴백(예: now+24h)을 적용한다.
     public var resetsAt: Date?
+    public var kind: Kind
 
-    public init(resetsAt: Date?) { self.resetsAt = resetsAt }
+    public init(resetsAt: Date?, kind: Kind = .window) {
+        self.resetsAt = resetsAt
+        self.kind = kind
+    }
 
     /// 리셋 시각이 없는 이벤트(월간 지출 한도 등)의 보수적 폴백: now + 24시간.
     /// 엔진·호출자(AppState/CLI)가 한도 기록 시 공통으로 사용한다.
@@ -81,8 +93,10 @@ public enum RateLimitParser {
             return legacyEpochHit(in: text, reference: reference)
         }
 
-        // P3: 월간 지출 한도 — 리셋 시각 없음
-        if firstMatch(monthlySpend, in: text) != nil { return RateLimitHit(resetsAt: nil) }
+        // P3: 월간 지출 한도 — 창 소진이 아님 (kind로 구분, 호출측이 usage 교차 확인)
+        if firstMatch(monthlySpend, in: text) != nil {
+            return RateLimitHit(resetsAt: nil, kind: .monthlySpend)
+        }
         // P2: 날짜 + 시각 (주간 한도)
         if let m = firstMatch(dateAndTime, in: text),
            let date = resolve(monthAbbr: capture(m, 1, in: text), day: capture(m, 2, in: text),

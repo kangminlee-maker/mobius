@@ -47,12 +47,18 @@ final class RateLimitParserTests: XCTestCase {
         XCTAssertNil(RateLimitParser.parse(line: line))
     }
 
-    func testMonthlySpendLimitHasNoResetTime() {
+    func testMonthlySpendLimitIsClassifiedNotAsWindowExhaustion() {
+        // 2026-07-13 실측: 이 이벤트는 플랜 창이 여유여도 뜬다(비차단) — kind로 구분해
+        // 호출측이 소진 기록 대신 usage 교차 확인을 하게 한다.
         let line = eventLine(
             text: "You've hit your monthly spend limit · raise it at claude.ai/settings/usage")
         let hit = RateLimitParser.parse(line: line)
-        XCTAssertNotNil(hit)
-        XCTAssertNil(hit?.resetsAt) // 리셋 시각 없음 → 호출측 폴백
+        XCTAssertEqual(hit?.kind, .monthlySpend)
+        XCTAssertNil(hit?.resetsAt)
+        // 창 소진 이벤트는 window로 분류 (음성 대조)
+        let windowHit = RateLimitParser.parse(
+            line: eventLine(text: "You've hit your session limit · resets 7:30pm (Asia/Seoul)"))
+        XCTAssertEqual(windowHit?.kind, .window)
     }
 
     func testSessionLimitResetsSameDay() {
