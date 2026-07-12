@@ -232,7 +232,7 @@ struct SettingsView: View {
 
                 categoryRow(SyncCategory.sessions.rawValue,
                             loc("대화 기록") + (sessionsSizeText.isEmpty ? "" : " · \(sessionsSizeText)"),
-                            loc("다른 Mac에서 대화를 이어서 할 수 있어요. 처음 한 번은 오래 걸려요."))
+                            loc("다른 Mac에서 대화를 이어서 할 수 있어요 — 사용자명이 달라도 괜찮아요. 처음 한 번은 오래 걸려요."))
                     .onAppear {
                         guard sessionsSizeText.isEmpty else { return }
                         let dir = state.env.projectsDir
