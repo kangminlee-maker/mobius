@@ -103,6 +103,9 @@ final class AppState: ObservableObject {
                 || UserDefaults.standard.bool(forKey: "showUsageGauges") else { return }
         guard usageTask == nil else { return }
         let now = Date()
+        // needsReauth 계정도 계속 조회한다 — CLI에서 직접 `claude auth login`으로 복구하는
+        // 경우, 조회가 200이면 그 복구를 감지해 needsReauth를 자동으로 푼다(아래 성공 경로).
+        // 여전히 401이면 `!profile.needsReauth` 가드가 재알림을 막으므로 스팸은 없다.
         let stale = store.file.accounts.filter {
             (usage[$0.id]?.fetchedAt ?? .distantPast) < now.addingTimeInterval(-usageStaleness)
         }
@@ -121,11 +124,25 @@ final class AppState: ObservableObject {
                         try? store.setNeedsReauth(profile.id, false)
                         reauthChanged = true
                     }
+                    // 리셋 시각 보정: 로그 기반 감지는 시각이 없으면 24h로 때웠지만
+                    // usage API는 진짜 리셋 시각을 안다. 이 계정이 limited로 마킹돼 있고
+                    // 소진된 한도(≥100%)의 실제 리셋이 현재 기록과 다르면 그 값으로 교정.
+                    if let real = earliestExhaustedReset(snap),
+                       let cur = store.file.accounts.first(where: { $0.id == profile.id })?.rateLimit,
+                       abs(cur.resetsAt.timeIntervalSince(real)) > 60 {
+                        try? store.update(profile.id) {
+                            $0.rateLimit = RateLimitInfo(resetsAt: real, recordedAt: cur.recordedAt)
+                        }
+                        reauthChanged = true // reload 유발용 (상태 변경 반영)
+                    }
                 } catch is UsageFetcherError {
-                    // 401/403: 저장된 토큰이 아직 유효해야 하는데 거부됨 = 진짜 재로그인 필요.
-                    // (만료된 옛 토큰의 401은 정상 현상이라 마킹하지 않는다 — 오탐 방지)
-                    if let exp = UsageFetcher.expiresAt(from: secret.keychainBlob), exp > Date(),
-                       !profile.needsReauth {
+                    // 401/403 = 이 계정의 토큰이 거부됨. 계정별 토큰으로 조회하므로 오귀인 불가.
+                    // - 활성 계정: 토큰이 신선해야 정상인데 거부됨 = 진짜 재로그인 필요.
+                    // - 비활성 계정: 저장 토큰이 자연 만료(expiresAt 지남)면 정상 휴면이라 마킹 안 함
+                    //   (전환하면 Claude Code가 갱신). 아직 유효기간인데 거부면 폐기된 것 → 마킹.
+                    let isActive = store.file.activeAccountID == profile.id
+                    let stillValid = (UsageFetcher.expiresAt(from: secret.keychainBlob) ?? .distantPast) > Date()
+                    if (isActive || stillValid), !profile.needsReauth {
                         try? store.setNeedsReauth(profile.id, true)
                         reauthChanged = true
                         notify(title: loc("재로그인 필요"),
@@ -139,6 +156,17 @@ final class AppState: ObservableObject {
             }
             saveUsageCache()
         }
+    }
+
+    /// 스냅샷에서 소진된(≥100%) 한도들의 가장 이른 실제 리셋 시각. 없으면 nil.
+    private func earliestExhaustedReset(_ s: UsageSnapshot) -> Date? {
+        var dates: [Date] = []
+        if let p = s.fiveHourPercent, p >= 100, let r = s.fiveHourResetsAt { dates.append(r) }
+        if let p = s.sevenDayPercent, p >= 100, let r = s.sevenDayResetsAt { dates.append(r) }
+        for l in s.scopedLimits ?? [] where l.percent >= 100 {
+            if let r = l.resetsAt { dates.append(r) }
+        }
+        return dates.min()
     }
 
     // MARK: 여러 Mac 동기화 (실험)
@@ -256,9 +284,13 @@ final class AppState: ObservableObject {
     var menuStatus: MenuStatus {
         let now = Date()
         guard let active = file.active else { return .unknown }
+        // 주계정에 머무는 중이면 주계정 색을 우선한다 — 사용자가 직접 주계정을 선택했을 때
+        // (Fable 등 일부 한도만 소진돼도) 알람색으로 보이지 않게. 실측 피드백 반영.
+        if active.id == file.primary?.id { return .primaryActive }
+        // fallback 활성 중: 갈 곳이 모두 소진/재로그인이면 allExhausted, 아니면 fallback.
         if file.accounts.allSatisfy({ $0.isLimited(now: now) || $0.needsReauth }),
            !file.accounts.isEmpty { return .allExhausted }
-        return active.id == file.primary?.id ? .primaryActive : .fallbackActive
+        return .fallbackActive
     }
 
     // MARK: 주기 처리
@@ -278,7 +310,12 @@ final class AppState: ObservableObject {
         // 배치 내 모든 hit는 스캔 시점의 활성 계정에 귀속 —
         // 루프 중 전환이 일어나도 남은 hit(구 세션 로그)가 새 활성 계정에 오기록되지 않도록.
         let activeID = store.file.activeAccountID
-        for hit in watcher.scan(now: now) {
+        let hits = watcher.scan(now: now)
+        // 주의: 인증 만료(authentication_failed) 로그는 "어느 계정" 것인지 적혀 있지 않다.
+        // 활성 계정에 갖다 붙이면 전환 직후 등에 엉뚱한 계정이 마킹된다(실측 오귀인).
+        // → needsReauth는 로그가 아니라 usage API 401(계정별 토큰으로 조회 → 오귀인 불가)로만
+        //   판정한다. refreshUsageIfStale() 참조.
+        for hit in hits {
             if let activeID {
                 try? store.update(activeID) {
                     $0.rateLimit = RateLimitInfo(resetsAt: hit.effectiveResetsAt(now: now),

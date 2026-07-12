@@ -131,6 +131,10 @@ struct AccountCardView: View {
             if let pct = u.sevenDayPercent {
                 gaugeRow(label: loc("주간"), percent: pct, resetsAt: u.sevenDayResetsAt)
             }
+            // 모델 스코프 주간 한도 (예: Fable) — API가 줄 때만. 제공 종료 시 자동 소멸.
+            ForEach(u.scopedLimits ?? [], id: \.label) { s in
+                gaugeRow(label: s.label, percent: s.percent, resetsAt: s.resetsAt)
+            }
         }
     }
 
@@ -138,7 +142,8 @@ struct AccountCardView: View {
         HStack(spacing: 6) {
             Text(label)
                 .font(.system(size: 9, weight: .medium)).foregroundStyle(.tertiary)
-                .frame(width: 28, alignment: .leading)
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .frame(width: 34, alignment: .leading)
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.secondary.opacity(0.18))
@@ -152,7 +157,8 @@ struct AccountCardView: View {
             Text("\(Int(percent))%")
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(gaugeColor(percent))
-                .frame(width: 26, alignment: .trailing)
+                .lineLimit(1).fixedSize()
+                .frame(width: 34, alignment: .trailing)
             if let resetsAt, resetsAt > now {
                 Text(loc("초기화 %@", remainText(until: resetsAt)))
                     .font(.system(size: 9)).foregroundStyle(.tertiary)

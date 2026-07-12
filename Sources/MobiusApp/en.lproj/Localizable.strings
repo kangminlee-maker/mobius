@@ -136,6 +136,8 @@
 
 /* AccountCardView */
 "재로그인 필요" = "Re-login required";
+"로그인이 만료됐어요" = "Login expired";
+"%@ 계정에 다시 로그인해야 해요. 카드의 '다시 로그인'을 눌러주세요." = "You need to sign in again to %@. Press 'Sign in again' on its card.";
 "다시 로그인" = "Sign in again";
 "%@ 계정의 인증이 만료됐어요. 카드의 '다시 로그인'을 눌러주세요." = "Authentication for %@ has expired. Press 'Sign in again' on its card.";
 "Primary 계정으로 설정" = "Set as primary account";

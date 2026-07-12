@@ -52,9 +52,7 @@ public final class SessionLogWatcher: @unchecked Sendable {
             offsets[url.path] = start + UInt64(completeLen)
             guard let text = String(data: data.prefix(completeLen), encoding: .utf8) else { continue }
             for line in text.split(separator: "\n") {
-                if let hit = RateLimitParser.parse(line: String(line), now: now) {
-                    hits.append(hit)
-                }
+                if let hit = RateLimitParser.parse(line: String(line), now: now) { hits.append(hit) }
             }
         }
         primed = true

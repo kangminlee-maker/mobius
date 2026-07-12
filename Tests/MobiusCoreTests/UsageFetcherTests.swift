@@ -33,6 +33,31 @@ final class UsageFetcherTests: XCTestCase {
         XCTAssertNil(UsageFetcher.accessToken(from: Data("{}".utf8)))
     }
 
+    func testParsesScopedModelLimit() {
+        let json = Data(#"""
+        {"five_hour":{"utilization":47},"seven_day":{"utilization":72,"resets_at":"2026-07-12T23:00:00.000+00:00"},
+         "limits":[
+           {"kind":"session","group":"session","percent":47},
+           {"kind":"weekly_all","group":"weekly","percent":72},
+           {"kind":"weekly_scoped","group":"weekly","percent":100,"severity":"critical",
+            "resets_at":"2026-07-12T23:00:00.000+00:00","scope":{"model":{"display_name":"Fable"}}}
+         ]}
+        """#.utf8)
+        let snap = UsageFetcher.parse(json)
+        XCTAssertEqual(snap?.scopedLimits?.count, 1)
+        XCTAssertEqual(snap?.scopedLimits?.first?.label, "Fable")
+        XCTAssertEqual(snap?.scopedLimits?.first?.percent, 100)
+        XCTAssertNotNil(snap?.scopedLimits?.first?.resetsAt)
+    }
+
+    func testOldCacheWithoutScopedDecodes() throws {
+        // 구버전 캐시(scopedLimits 키 없음)도 디코드되어야 한다
+        let old = Data(#"{"fiveHourPercent":10,"sevenDayPercent":20,"fetchedAt":0}"#.utf8)
+        let snap = try JSONDecoder().decode(UsageSnapshot.self, from: old)
+        XCTAssertEqual(snap.fiveHourPercent, 10)
+        XCTAssertNil(snap.scopedLimits)
+    }
+
     func testExpiresAtParsing() {
         // 실측: claudeAiOauth.expiresAt는 13자리 epoch 밀리초 (2026-07-11 확인)
         let ms = Data(#"{"claudeAiOauth":{"expiresAt":1783785648000}}"#.utf8)

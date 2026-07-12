@@ -64,18 +64,25 @@ public final class AutoSwitchEngine: @unchecked Sendable {
         return f
     }
 
-    /// 주기 틱: primary 복귀 판단.
-    /// 복귀는 현재 fallback 활성이 "자동 전환"의 결과일 때만(autoSwitchedFromPrimary) —
-    /// 사용자가 수동으로 fallback에 전환한 상태를 강제로 되돌리지 않는다.
+    /// 주기 틱: (A) 활성 계정이 소진 상태면 여유 있는 계정으로 자가 전환,
+    ///          (B) fallback 활성이 자동 전환의 결과라면 primary 리셋 시 복귀.
     public func onTick(file: AccountsFile, now: Date) -> Decision {
-        guard file.autoSwitchEnabled,
-              file.autoSwitchedFromPrimary,
+        guard file.autoSwitchEnabled, !inCooldown(now), let active = file.active else { return .none }
+
+        // (A) 자가복구: 활성 계정이 소진됐거나(rate-limit) 로그인이 만료됐는데(needsReauth)
+        //     여전히 활성이면, 여유 있는 계정으로 전환한다. 로그 hit 순간의 전환을 쿨다운·
+        //     일시적 사유·throw로 놓쳤어도 다음 틱에 자가 복구된다.
+        if active.isLimited(now: now) || active.needsReauth,
+           let next = firstAvailable(in: file, excluding: active.id, now: now) {
+            return .switchTo(next, reason: .activeExhausted)
+        }
+
+        // (B) primary 복귀 — 현재 fallback 활성이 "자동 전환"의 결과일 때만
+        //     (사용자가 수동으로 fallback에 전환한 상태는 강제로 되돌리지 않는다).
+        guard file.autoSwitchedFromPrimary,
               let primary = file.primary,
-              let active = file.active,
               active.id != primary.id,
-              !primary.needsReauth,
-              !inCooldown(now) else { return .none }
-        // primary가 한도 기록이 없거나, 리셋 시각 + margin이 지났으면 복귀
+              !primary.needsReauth else { return .none }
         if let rl = primary.rateLimit {
             guard now >= rl.resetsAt.addingTimeInterval(margin) else { return .none }
         }

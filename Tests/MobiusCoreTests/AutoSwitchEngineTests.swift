@@ -36,6 +36,37 @@ final class AutoSwitchEngineTests: XCTestCase {
         XCTAssertEqual(d, .allExhausted) // 갈 곳 없음
     }
 
+    func testTickSelfHealsWhenActiveLimitedButNotSwitched() {
+        // 로그 hit 순간의 전환을 놓쳐(쿨다운·throw 등) primary가 소진된 채 활성으로 남은 상태.
+        file.accounts[0].rateLimit = RateLimitInfo(resetsAt: t0.addingTimeInterval(3600), recordedAt: t0)
+        // 쿨다운 밖의 다음 틱 → 여유 있는 fb1로 자가 전환
+        let d = AutoSwitchEngine().onTick(file: file, now: t0)
+        XCTAssertEqual(d, .switchTo(fb1.id, reason: .activeExhausted))
+    }
+
+    func testTickSelfHealsWhenActiveNeedsReauth() {
+        // 로그인 만료로 primary가 needsReauth 마킹된 채 활성 → 여유 있는 fb1로 전환
+        file.accounts[0].needsReauth = true
+        XCTAssertEqual(AutoSwitchEngine().onTick(file: file, now: t0),
+                       .switchTo(fb1.id, reason: .activeExhausted))
+    }
+
+    func testTickSelfHealRespectsCooldown() {
+        file.accounts[0].rateLimit = RateLimitInfo(resetsAt: t0.addingTimeInterval(3600), recordedAt: t0)
+        let engine = AutoSwitchEngine()
+        engine.noteSwitched(now: t0)                      // 방금 전환됨
+        XCTAssertEqual(engine.onTick(file: file, now: t0.addingTimeInterval(30)), .none) // 쿨다운
+        XCTAssertEqual(engine.onTick(file: file, now: t0.addingTimeInterval(121)),
+                       .switchTo(fb1.id, reason: .activeExhausted)) // 쿨다운 후
+    }
+
+    func testTickSelfHealNoTargetStaysPut() {
+        file.accounts[0].rateLimit = RateLimitInfo(resetsAt: t0.addingTimeInterval(3600), recordedAt: t0)
+        file.accounts[1].rateLimit = RateLimitInfo(resetsAt: t0.addingTimeInterval(3600), recordedAt: t0)
+        file.accounts[2].needsReauth = true
+        XCTAssertEqual(AutoSwitchEngine().onTick(file: file, now: t0), .none) // 갈 곳 없음 → 유지
+    }
+
     func testAutoSwitchDisabledNotifiesExhaustedOnly() {
         // 스펙: 자동 fallback을 끄면 전환 없이 "소진 알림만"
         file.autoSwitchEnabled = false

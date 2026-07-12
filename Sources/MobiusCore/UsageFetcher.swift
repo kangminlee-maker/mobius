@@ -1,19 +1,35 @@
 import Foundation
 
+/// 모델별 스코프 한도 (예: Fable 주간). API의 limits[]에서 온다 —
+/// 한시적 제공이 끝나 API가 항목을 안 주면 자동으로 사라진다(별도 토글 불필요).
+public struct ScopedUsageLimit: Codable, Equatable, Sendable {
+    public var label: String      // 모델 표시명 (예: "Fable")
+    public var percent: Double
+    public var resetsAt: Date?
+    public init(label: String, percent: Double, resetsAt: Date?) {
+        self.label = label; self.percent = percent; self.resetsAt = resetsAt
+    }
+}
+
 /// 계정의 5시간/주간 사용량 스냅샷 (usage 엔드포인트 실측 스키마 기반)
 public struct UsageSnapshot: Codable, Equatable, Sendable {
     public var fiveHourPercent: Double?
     public var fiveHourResetsAt: Date?
     public var sevenDayPercent: Double?
     public var sevenDayResetsAt: Date?
+    /// 모델 스코프 주간 한도들 (limits[].weekly_scoped). 없으면 빈 배열.
+    /// Codable: 구버전 캐시에 이 키가 없어도 디코드되도록 옵셔널.
+    public var scopedLimits: [ScopedUsageLimit]?
     public var fetchedAt: Date
 
     public init(fiveHourPercent: Double?, fiveHourResetsAt: Date?,
-                sevenDayPercent: Double?, sevenDayResetsAt: Date?, fetchedAt: Date) {
+                sevenDayPercent: Double?, sevenDayResetsAt: Date?,
+                scopedLimits: [ScopedUsageLimit]? = nil, fetchedAt: Date) {
         self.fiveHourPercent = fiveHourPercent
         self.fiveHourResetsAt = fiveHourResetsAt
         self.sevenDayPercent = sevenDayPercent
         self.sevenDayResetsAt = sevenDayResetsAt
+        self.scopedLimits = scopedLimits
         self.fetchedAt = fetchedAt
     }
 }
@@ -75,10 +91,24 @@ public enum UsageFetcher {
         }
         let (fivePct, fiveReset) = block("five_hour")
         let (weekPct, weekReset) = block("seven_day")
-        guard fivePct != nil || weekPct != nil else { return nil }
+
+        // limits[] 중 모델 스코프 주간 한도(weekly_scoped) — 예: Fable 주간
+        var scoped: [ScopedUsageLimit] = []
+        for l in (obj["limits"] as? [[String: Any]]) ?? [] {
+            guard l["kind"] as? String == "weekly_scoped",
+                  let model = (l["scope"] as? [String: Any])?["model"] as? [String: Any],
+                  let name = model["display_name"] as? String, !name.isEmpty else { continue }
+            let pct: Double = (l["percent"] as? Double)
+                ?? (l["percent"] as? Int).map(Double.init) ?? 0
+            var reset: Date?
+            if let s = l["resets_at"] as? String { reset = isoFrac.date(from: s) ?? iso.date(from: s) }
+            scoped.append(ScopedUsageLimit(label: name, percent: pct, resetsAt: reset))
+        }
+
+        guard fivePct != nil || weekPct != nil || !scoped.isEmpty else { return nil }
         return UsageSnapshot(fiveHourPercent: fivePct, fiveHourResetsAt: fiveReset,
                              sevenDayPercent: weekPct, sevenDayResetsAt: weekReset,
-                             fetchedAt: now)
+                             scopedLimits: scoped.isEmpty ? nil : scoped, fetchedAt: now)
     }
 
     public static func fetch(keychainBlob: Data) async throws -> UsageSnapshot? {
