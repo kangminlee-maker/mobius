@@ -110,13 +110,20 @@ CLI v2.1.181 ~ v2.1.205). 이벤트는 **한 줄짜리 JSON 객체**로, 일반 
 |---|---|---|---|
 | P1 | `You've hit your session limit · resets (\d{1,2}(?::\d{2})?)(am\|pm) \(([^)]+)\)` | 세션 한도 → 전환 | 당일/익일 해당 시각, TZ는 캡처된 IANA명 |
 | P2 | `You've hit your weekly limit · resets ([A-Z][a-z]{2} \d{1,2}) at (\d{1,2}(?::\d{2})?)(am\|pm) \(([^)]+)\)` | 주간 한도 → 전환 | 날짜+시각, TZ 동일 |
-| P3 | `You've hit your monthly spend limit` | 지출 한도 → 전환 (리셋 시각 없음) | 없음 → 폴백 정책(예: 수동 복귀) |
+| P3 | `You've hit your monthly spend limit` | ~~지출 한도 → 전환~~ **[정정 2026-07-13]** 소진 기록 금지 — usage 교차 확인으로 대체 (아래 주의사항) | 없음 |
 | P4 | `usage limit reached\|(\d{10,13})` | 레거시 epoch 포맷 (미실측, 하위호환 유지) | epoch 그대로 |
 | P5 | `(usage\|session\|weekly) limit.*resets? (at )?(.+)` | 미래 변형 대비 관대한 폴백 | best-effort 파싱 |
 | — | `not your usage limit` 포함 시 | **제외** (서버측 rate limit) | — |
 
 주의사항:
 
+- **[정정 2026-07-13] P3(monthly spend limit)는 창 소진이 아니다** — 이 이벤트는
+  extra usage 크레딧의 월 한도로, **플랜 5h/주간 창이 여유여도 뜨고 세션은 계속
+  동작한다**(실측: 00:13~00:14 KST에 실행 중 세션 15개 파일에 동시 기록, 이후에도
+  해당 계정 세션 정상 동작 — 24h 폴백으로 기록했더니 멀쩡한 계정 3개가 하루 종일
+  '소진'으로 오표시). 단 창 소진과 겹치면 **이 메시지가 우선 표시돼 P1/P2를 가린다**
+  (사용자 확인) → 파서는 kind=monthlySpend로 구분만 하고, 앱이 usage 엔드포인트로
+  5h/주간 현황을 교차 확인해 진짜 소진이면 실제 리셋 시각으로 기록한다.
 - **`not your usage limit` 제외 규칙이 가장 중요** — 실측 59건 중 41건(69%)이 서버측 제한이라 이걸 계정 한도로 오인하면 불필요한 전환이 발생한다.
 - 리셋 시각 텍스트는 이벤트의 `(IANA TZ)` 기준으로 해석. "당일 vs 익일"은 이벤트 `timestamp`와 비교해 이미 지난 시각이면 익일로 굴림.
 - 텍스트 문구는 CLI 버전에 따라 변할 수 있음(v2.1.181→205 사이에도 표현 다양). 구조화 필드(`error`, `apiErrorStatus`) 우선 + 텍스트는 리셋 시각 추출용으로만 쓰는 이중 구조가 안전.
