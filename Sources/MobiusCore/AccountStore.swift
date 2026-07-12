@@ -19,10 +19,19 @@ public final class AccountStore: @unchecked Sendable {
     public init(env: MobiusEnvironment, keychain: KeychainClient) throws {
         self.env = env
         self.keychain = keychain
-        if let data = try? Data(contentsOf: env.accountsFile) {
-            self.file = try JSONDecoder().decode(AccountsFile.self, from: data)
-        } else {
+        guard let data = try? Data(contentsOf: env.accountsFile) else {
             self.file = AccountsFile()
+            return
+        }
+        do {
+            self.file = try JSONDecoder().decode(AccountsFile.self, from: data)
+        } catch {
+            // 방어: 디코드 실패 시 원본을 백업해 둔다 — 빈 스토어로 시작한 앱이 이후 저장으로
+            // 원본을 덮어써도 계정 데이터가 영구 유실되지 않도록(복구 가능).
+            let backup = env.accountsFile.deletingLastPathComponent()
+                .appendingPathComponent("accounts.corrupt.json")
+            try? data.write(to: backup, options: .atomic)
+            throw error
         }
     }
 

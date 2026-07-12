@@ -87,6 +87,34 @@ final class AccountStoreTests: XCTestCase {
         XCTAssertThrowsError(try store.setNeedsReauth(UUID(), true)) // 미등록 계정
     }
 
+    func testDecodesOldFileWithoutNewFields() throws {
+        // 하위 호환: modelScoped/userPinned 키가 없는 구버전 accounts.json도 깨지지 않아야 한다.
+        // (다른 사용자가 앱을 업데이트해도 계정 목록 유실 방지 — 실측 사고 재발 방지)
+        let old = """
+        {"accounts":[{"id":"39327A8E-494D-4FF4-B216-D3D314173500","nickname":"fore.st",\
+        "emailAddress":"f@x.com","organizationName":"Raven","tierDescription":"Max",\
+        "needsReauth":false,"hasDesktopSnapshot":false,\
+        "rateLimit":{"resetsAt":700000000,"recordedAt":699999000}}],\
+        "activeAccountID":"39327A8E-494D-4FF4-B216-D3D314173500","autoSwitchEnabled":true,\
+        "desktopSyncEnabled":false,"desktopAutoSwitchEnabled":false,"autoSwitchedFromPrimary":false}
+        """
+        let f = try JSONDecoder().decode(AccountsFile.self, from: Data(old.utf8))
+        XCTAssertEqual(f.accounts.count, 1)
+        XCTAssertEqual(f.accounts[0].nickname, "fore.st")
+        XCTAssertFalse(f.accounts[0].userPinned)          // 기본값
+        XCTAssertEqual(f.accounts[0].rateLimit?.modelScoped, false) // 기본값
+    }
+
+    func testCorruptFileIsBackedUpNotLost() throws {
+        try fm.createDirectory(at: env.appSupportDir, withIntermediateDirectories: true)
+        try Data("{ not valid json".utf8).write(to: env.accountsFile)
+        XCTAssertThrowsError(try AccountStore(env: env, keychain: kc)) // 손상 → throw
+        let backup = env.appSupportDir.appendingPathComponent("accounts.corrupt.json")
+        XCTAssertTrue(fm.fileExists(atPath: backup.path)) // 원본 백업됨(유실 방지)
+    }
+
+    let fm = FileManager.default
+
     func testRemoveDeletesSecret() throws {
         let store = try AccountStore(env: env, keychain: kc)
         let p = try store.upsertProfile(nickname: "x", snapshot: snap(email: "p@x.com"))

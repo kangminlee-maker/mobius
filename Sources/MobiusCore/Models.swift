@@ -11,6 +11,14 @@ public struct RateLimitInfo: Codable, Equatable, Sendable {
         self.recordedAt = recordedAt
         self.modelScoped = modelScoped
     }
+
+    // 하위 호환: modelScoped 키가 없는 구버전 파일도 디코드되게 (없으면 false).
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        resetsAt = try c.decode(Date.self, forKey: .resetsAt)
+        recordedAt = try c.decode(Date.self, forKey: .recordedAt)
+        modelScoped = try c.decodeIfPresent(Bool.self, forKey: .modelScoped) ?? false
+    }
 }
 
 public struct AccountProfile: Codable, Equatable, Identifiable, Sendable {
@@ -35,6 +43,21 @@ public struct AccountProfile: Codable, Equatable, Identifiable, Sendable {
         self.organizationName = organizationName; self.tierDescription = tierDescription
         self.needsReauth = needsReauth; self.rateLimit = rateLimit
         self.hasDesktopSnapshot = hasDesktopSnapshot; self.userPinned = userPinned
+    }
+
+    // 하위 호환: 새로 추가된 키(userPinned 등)가 없는 구버전 파일도 디코드되게 —
+    // 다른 사용자가 업데이트해도 계정 목록이 깨지지 않도록. 없으면 기본값.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        nickname = try c.decode(String.self, forKey: .nickname)
+        emailAddress = try c.decode(String.self, forKey: .emailAddress)
+        organizationName = try c.decodeIfPresent(String.self, forKey: .organizationName) ?? ""
+        tierDescription = try c.decodeIfPresent(String.self, forKey: .tierDescription) ?? ""
+        needsReauth = try c.decodeIfPresent(Bool.self, forKey: .needsReauth) ?? false
+        rateLimit = try c.decodeIfPresent(RateLimitInfo.self, forKey: .rateLimit)
+        hasDesktopSnapshot = try c.decodeIfPresent(Bool.self, forKey: .hasDesktopSnapshot) ?? false
+        userPinned = try c.decodeIfPresent(Bool.self, forKey: .userPinned) ?? false
     }
 
     /// 지금 한도에 걸려 있는가 (리셋 시각 전인가)
