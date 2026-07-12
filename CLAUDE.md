@@ -167,6 +167,18 @@ Sources/MobiusApp/        SwiftUI 메뉴바 앱 + AppState + Views/ + LoginFlow 
     (2) 샌드박스 셸에서의 security 테스트는 GUI 세션과 판정이 달라 **착시를 만든다** —
     반드시 사용자 터미널/실제 앱 경로로 재현할 것.
 
+13. **"계정 추가"가 앱에서만 실패, 터미널 재현은 통과하는 착시** — GUI 앱이 띄우는
+    `zsh -lc`(비대화형 로그인 셸)는 `.zshrc`를 읽지 않으므로, claude의 PATH 추가가
+    `.zshrc`에만 있는 환경(예: `~/.local/bin`)에선 bare `claude`가 command not found로
+    즉사 → "로그인 URL을 얻지 못했습니다". 개발자 터미널 재현은 사용자 셸 PATH를
+    물려받아 통과해버린다. → LoginFlow는 `ClaudeCLI.locate()` 절대 경로로 실행.
+    앱 조건 재현은 `env -i HOME=... PATH=/usr/bin:/bin:... /bin/zsh -lc ...`로 할 것.
+14. **claude 2.1.207의 authorize URL은 별칭 — returnTo에 `/cai`를 실으면 로그인 후 404** —
+    CLI가 브라우저로 여는 `claude.com/cai/oauth/authorize`는 `claude.ai/oauth/authorize`로
+    307 포워딩되는 별칭이다(쿼리 보존, curl 실측). login 페이지는 claude.ai에 살고
+    returnTo를 claude.ai 기준 상대 경로로 해석하므로, selectAccountURL()은 `/cai`
+    접두사를 벗겨 정식 경로로 매핑해야 한다 (안 벗기면 claude.ai/cai/… 404, 실측).
+
 ## QA / 진행 상황
 
 - `docs/qa/m1-checklist.md` 수동 QA: 2·3·6·7·9·10 완료(2026-07-11). 남은 항목: 1·4·5·8.
