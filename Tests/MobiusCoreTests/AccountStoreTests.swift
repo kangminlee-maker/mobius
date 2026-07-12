@@ -44,14 +44,24 @@ final class AccountStoreTests: XCTestCase {
         XCTAssertEqual(store2.file.activeAccountID, p.id)
     }
 
+    func testSetAutoSwitchPerProviderPersists() throws {
+        let store = try AccountStore(env: env, keychain: kc)
+        try store.setAutoSwitch(false, provider: .codex)
+        // 새 인스턴스로 다시 로드해도 풀별 상태 유지 — 타 풀은 기본 켬
+        let store2 = try AccountStore(env: env, keychain: kc)
+        XCTAssertFalse(store2.file.isAutoSwitchEnabled(.codex))
+        XCTAssertTrue(store2.file.isAutoSwitchEnabled(.claude))
+    }
+
     func testMoveFallbackKeepsPrimaryPinned() throws {
         let store = try AccountStore(env: env, keychain: kc)
         _ = try store.upsertProfile(nickname: "primary", snapshot: snap(email: "a@x.com"))
         _ = try store.upsertProfile(nickname: "fb1", snapshot: snap(email: "b@x.com"))
         _ = try store.upsertProfile(nickname: "fb2", snapshot: snap(email: "c@x.com"))
-        try store.moveFallback(fromIndex: 2, toIndex: 1) // fb2를 fb1 앞으로
+        try store.moveFallback(provider: .claude, fromIndex: 2, toIndex: 1) // fb2를 fb1 앞으로
         XCTAssertEqual(store.file.accounts.map(\.nickname), ["primary", "fb2", "fb1"])
-        XCTAssertThrowsError(try store.moveFallback(fromIndex: 0, toIndex: 1)) // primary 이동 금지
+        XCTAssertThrowsError( // primary 이동 금지
+            try store.moveFallback(provider: .claude, fromIndex: 0, toIndex: 1))
     }
 
     func testSetPrimaryPromotesAndDemotesOldPrimary() throws {
@@ -59,7 +69,7 @@ final class AccountStoreTests: XCTestCase {
         _ = try store.upsertProfile(nickname: "primary", snapshot: snap(email: "a@x.com"))
         let fb1 = try store.upsertProfile(nickname: "fb1", snapshot: snap(email: "b@x.com"))
         _ = try store.upsertProfile(nickname: "fb2", snapshot: snap(email: "c@x.com"))
-        try store.setAutoSwitchedFromPrimary(true)
+        try store.setAutoSwitchedFromPrimary(true, provider: .claude)
 
         try store.setPrimary(fb1.id) // fb1 승격 → 기존 primary는 첫 fallback으로
         XCTAssertEqual(store.file.accounts.map(\.nickname), ["fb1", "primary", "fb2"])
