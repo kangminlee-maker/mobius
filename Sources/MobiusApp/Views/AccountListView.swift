@@ -112,7 +112,7 @@ struct AccountListView: View {
     }
 
     private func card(_ p: AccountProfile, isPrimary: Bool) -> some View {
-        AccountCardView(profile: p, isActive: p.id == state.file.activeAccountID,
+        AccountCardView(profile: p, isActive: p.id == (state.pendingSwitchID ?? state.file.activeAccountID),
                         isPrimary: isPrimary,
                         autoSwitchOn: state.file.autoSwitchEnabled,
                         usage: usageFor(p), now: now,

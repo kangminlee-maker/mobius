@@ -11,6 +11,9 @@ final class AppState: ObservableObject {
     @Published private(set) var file = AccountsFile()
     @Published var lastError: String?
     @Published private(set) var usage: [UUID: UsageSnapshot] = [:]
+    // 수동 전환 낙관적 표시 — 클릭 즉시 이 계정을 활성으로 보여주고(스무스), 실제 refresh+스왑은
+    // 백그라운드에서. 완료되면 nil로 정착(실제 activeAccountID가 인계).
+    @Published private(set) var pendingSwitchID: UUID?
     private var usageTask: Task<Void, Never>?
     private var usageCacheLoaded = false
     private static let usageCacheKey = "usageCacheV1"
@@ -489,11 +492,13 @@ final class AppState: ObservableObject {
     // MARK: 사용자 액션
 
     func manualSwitch(to id: UUID) {
-        // 재로그인 필요로 이미 마킹된 계정은 그대로 전환(이미 죽은 걸 앎). 아니면 클릭한 계정을
-        // **한 번 refresh** 해 살았는지 확인 + 신선한 토큰 확보 후 전환한다(전환 직전 검증과 동일).
         let alreadyFlagged = store.file.accounts.first { $0.id == id }?.needsReauth ?? false
         guard !alreadyFlagged else { performSwitch(to: id); return }
+        // 낙관적 표시: 클릭 즉시 이 계정을 활성으로 보여줘 UI가 스무스하게 전환된 것처럼 보이게 한다.
+        // 실제 refresh(대상이 아직 폴백일 때 — 안전) + 자격증명 스왑은 백그라운드에서.
+        pendingSwitchID = id
         Task { @MainActor in
+            defer { pendingSwitchID = nil }   // 완료되면 실제 activeAccountID가 표시를 인계
             guard await preflightFallback(id, now: Date()) else { reload(); return } // 죽음 → 취소(마킹됨)
             performSwitch(to: id)
         }
