@@ -163,7 +163,10 @@ struct AccountListView: View {
             }.buttonStyle(.plain).foregroundStyle(.secondary)
             Spacer()
             if let err = state.lastError {
-                Text(err).font(.system(size: 9)).foregroundStyle(.red).lineLimit(1)
+                // 길면 …로 잘리므로 hover 툴팁(.help)으로 전체 메시지를 보여준다
+                Text(err).font(.system(size: 9)).foregroundStyle(.red)
+                    .lineLimit(1).truncationMode(.tail)
+                    .help(err)
             }
             // SettingsLink는 accessory(메뉴바 전용) 앱에서 창을 활성화하지 못해 무반응 —
             // 앱을 먼저 활성화한 뒤 openSettings 환경 액션으로 연다
