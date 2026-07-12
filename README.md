@@ -27,7 +27,7 @@ primary → fallback → 다시 primary. 끝없이 이어지는 뫼비우스 띠
 - 터미널(Claude Code CLI)과 Claude Desktop 앱을 함께 쓰는 분
 
 > **지원**: claude.ai 구독 계정(개인 Max, 회사 Team/Enterprise)의 Claude Code CLI 전환.
-> Claude Desktop 동시 전환은 실험 기능으로 포함.
+> Claude Desktop 동시 전환도 지원.
 > **미지원**: Console API 키 / Bedrock / Vertex 방식. **요구 사항**: macOS 14 이상, `claude` CLI.
 
 ## 설치
@@ -86,9 +86,9 @@ macOS가 *"'Mobius'은(는) 확인되지 않은 개발자가 배포했기 때문
 |---|---|---|
 | CLI 자동 fallback | 켬 | 한도 소진 시 다음 계정으로 자동 전환. 끄면 알림만 오고 수동 전환은 언제나 가능 |
 | Desktop 자동 fallback | 끔 | 자동 전환 때 Claude Desktop도 함께 전환 (전환 순간 Desktop이 재시작됨) |
-| 계정 전환 시 Desktop도 전환 (실험) | 끔 | 카드 클릭 전환 때 Desktop 동시 전환. 해당 계정을 Desktop에 연결해둔 경우에만 동작 |
+| 계정 전환 시 Desktop도 전환 | 끔 | 카드 클릭 전환 때 Desktop 동시 전환. 해당 계정을 Desktop에 연결해둔 경우에만 동작 |
 
-### Claude Desktop도 함께 쓰려면 (실험 기능)
+### Claude Desktop도 함께 쓰려면
 
 계정 카드의 **⋯ → "Claude Desktop 연결"**을 누르면 안내에 따라
 ① Desktop이 열리고 ② 그 계정으로 로그인하면 ③ 자동으로 저장됩니다.
@@ -154,7 +154,7 @@ CLI로 전환해도 실행 중인 앱 화면에 즉시 반영됩니다.
   추가 요청 없음) 카드에 **"다시 로그인" 버튼**이 나타납니다. 자동 전환은 해당 계정을 건너뜁니다.
 - **전환 직후 일시적 오표시**: 구 세션의 잔여 로그로 새 계정 카드에 리셋 카운트다운이
   잠깐 잘못 보일 수 있습니다 (시간이 지나면 자연 해소).
-- **Claude Desktop (실험)**:
+- **Claude Desktop**:
   - 핫스왑이 불가능해 전환 시 Desktop 재시작이 필요합니다 (자동화되어 있고 2~5초 깜빡임).
   - 웹 세션 쿠키가 만료되면(수 주) 해당 계정은 Desktop 재로그인 후 다시 연결해야 합니다.
   - 비공식 저장 구조에 의존하므로 Desktop 업데이트로 동작이 깨질 수 있습니다.

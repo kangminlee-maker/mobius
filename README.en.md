@@ -27,7 +27,7 @@ Click the ∞ icon in the menu bar to open this panel. Each account shows its
 - You use both the terminal (Claude Code CLI) and the Claude Desktop app
 
 > **Supported**: Claude Code CLI switching for claude.ai subscription accounts
-> (personal Max, work Team/Enterprise). Claude Desktop co-switching is included as experimental.
+> (personal Max, work Team/Enterprise). Claude Desktop co-switching is supported too.
 > **Not supported**: Console API keys / Bedrock / Vertex.
 > **Requirements**: macOS 14+, the `claude` CLI.
 
@@ -89,9 +89,9 @@ instead of creating a duplicate.
 |---|---|---|
 | Auto fallback for Claude Code CLI | On | Auto-switch when a limit is hit. Off = notification only; manual switching always works |
 | Auto fallback for Claude Desktop | Off | Also switch Claude Desktop on auto-switch (Desktop restarts at that moment) |
-| Also switch Claude Desktop on account switch (experimental) | Off | Co-switch Desktop on card-click switches. Works only for accounts connected to Desktop |
+| Also switch Claude Desktop on account switch | Off | Co-switch Desktop on card-click switches. Works only for accounts connected to Desktop |
 
-### Using Claude Desktop too (experimental)
+### Using Claude Desktop too
 
 Press **⋯ → "Connect Claude Desktop"** on an account card, then follow the guide:
 ① Desktop opens ② sign in with that account ③ it's saved automatically.
@@ -165,7 +165,7 @@ Usage gauges are fetched only when the popover opens (4-minute cache) — never 
   button on the card. Auto-switch skips flagged accounts.
 - **Brief mis-display after switching**: stale logs from the previous session may
   briefly show a wrong reset countdown on the new account's card (self-resolves).
-- **Claude Desktop (experimental)**:
+- **Claude Desktop**:
   - No hot-swap — switching requires a Desktop restart (automated, 2–5s flicker).
   - If web session cookies expire (weeks), reconnect that account after signing
     into Desktop again.
