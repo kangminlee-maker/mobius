@@ -116,8 +116,10 @@ changes CLI credentials only.
 
 ## How auto-switching works
 
-**Zero network requests** — Mobius never polls a server, so there's no account risk
-from unusual traffic.
+**Limit detection never touches the network** — it reads local session logs only, so
+there's no account risk from unusual traffic. Mobius's only server calls are the usage
+gauges (fetched when you open the popover, 4-minute cache) and sign-in; turn the gauges
+off and background network use drops to zero.
 
 1. **Detect**: every 15 seconds it scans only the new lines of
    `~/.claude/projects/**/*.jsonl` session logs and parses reset times from
