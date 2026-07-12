@@ -58,6 +58,8 @@ Sources/MobiusApp/        SwiftUI 메뉴바 앱 + AppState + Views/ + LoginFlow 
 ### 서명 (Keychain 승인창 영구 방지)
 - ad-hoc 서명(`-s -`)은 **리빌드마다 정체성이 바뀌어** "항상 허용"이 매번 리셋됨.
 - `Scripts/setup-signing.sh`로 고정 인증서 `Mobius Dev Signing` 생성 → make-app.sh가 자동 사용.
+- 정식 인증서(Apple Developer 등)가 이미 있으면 `MOBIUS_SIGN_IDENTITY="<인증서 이름>"
+  Scripts/make-app.sh`로 지정 — setup-signing.sh 불필요, 우선순위는 환경변수 > 고정 인증서 > ad-hoc.
 - 고정 서명 + 아래 '비밀은 파일' 조합으로 승인창이 사실상 사라짐.
 
 ### Desktop 내장 Claude Code가 `security` CLI로 CLI 자격증명을 읽는다 (파티션 리스트)
