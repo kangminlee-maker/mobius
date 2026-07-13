@@ -54,21 +54,46 @@ final class CodexRateLimitParserTests: XCTestCase {
                        Date(timeIntervalSince1970: 1_784_354_513))
     }
 
-    func testReachedTypeNamingWindowTriggersExhaustion() throws {
-        // 서버 명시가 있으면 used_percent가 100 미만이어도 소진
+    func testReachedTypeTriggersExhaustionWithLatestReset() throws {
+        // 서버 명시(reached_type != null)면 used_percent가 100 미만이어도 소진.
+        // 어느 창인지 불명이라 관찰된 창 중 가장 늦은 리셋(보수적)으로 처리 — 슬롯 위치 무관.
         let status = try XCTUnwrap(CodexRateLimitParser.parse(
-            line: realLine(primaryPct: 97.0, reached: #""secondary""#)))
-        XCTAssertEqual(status.reachedType, "secondary")
+            line: realLine(primaryPct: 97.0, reached: #""some_kind""#)))
+        XCTAssertNotNil(status.reachedType)
         XCTAssertEqual(status.exhaustionHit()?.resetsAt,
-                       Date(timeIntervalSince1970: 1_784_354_513)) // secondary의 리셋
+                       Date(timeIntervalSince1970: 1_784_354_513)) // 두 창 중 늦은 쪽(주간)
     }
 
-    func testReachedTypeUnknownFallsBackToPrimaryReset() throws {
-        // 창 이름을 못 읽는 미래 변형 → 가장 짧은 잠금(primary 리셋)으로 보수적 처리
-        let status = try XCTUnwrap(CodexRateLimitParser.parse(
-            line: realLine(reached: #""some_future_kind""#)))
-        XCTAssertEqual(status.exhaustionHit()?.resetsAt,
-                       Date(timeIntervalSince1970: 1_783_861_033))
+    // MARK: ★ 창 종류는 window_minutes로 판정 (슬롯 위치 아님)
+
+    /// 실측 2026-07-13: OpenAI가 5시간 한도를 제거 → primary 슬롯에 주간 창(10080분),
+    /// secondary=null. 슬롯으로 매핑하면 주간이 "5시간" 게이지로 오표시된다.
+    func testWeeklyOnlyStructureMapsToWeeklyGauge() throws {
+        let line = #"""
+        {"timestamp":"2026-07-13T00:26:12.136Z","type":"event_msg","payload":{"type":"token_count","rate_limits":{"limit_id":"codex","limit_name":null,"primary":{"used_percent":42.0,"window_minutes":10080,"resets_at":1784501289},"secondary":null,"credits":null,"individual_limit":null,"plan_type":"pro","rate_limit_reached_type":null}}}
+        """#
+        let status = try XCTUnwrap(CodexRateLimitParser.parse(line: line))
+        let usage = status.usageSnapshot(fetchedAt: Date(timeIntervalSince1970: 0))
+        XCTAssertNil(usage.fiveHourPercent)                       // 5h 한도 없음 → 게이지 미표시
+        XCTAssertEqual(usage.sevenDayPercent, 42.0)               // 주간이 주간으로 매핑
+        XCTAssertEqual(usage.sevenDayResetsAt, Date(timeIntervalSince1970: 1_784_501_289))
+    }
+
+    /// 주간이 primary 슬롯이어도 소진 판정은 슬롯 위치에 의존하지 않는다.
+    func testWeeklyOnlyExhaustionByWindowMinutes() throws {
+        let line = #"""
+        {"type":"event_msg","payload":{"type":"token_count","rate_limits":{"limit_id":"codex","primary":{"used_percent":100.0,"window_minutes":10080,"resets_at":1784501289},"secondary":null,"rate_limit_reached_type":null}}}
+        """#
+        let status = try XCTUnwrap(CodexRateLimitParser.parse(line: line))
+        XCTAssertEqual(status.exhaustionHit()?.resetsAt, Date(timeIntervalSince1970: 1_784_501_289))
+    }
+
+    /// 모델 전용 한도(limit_name 존재)는 계정 게이지·소진에서 제외 — 파서가 nil 반환.
+    func testModelScopedLimitIsIgnored() {
+        let line = #"""
+        {"type":"event_msg","payload":{"type":"token_count","rate_limits":{"limit_id":"codex_bengalfox","limit_name":"GPT-5.3-Codex-Spark","primary":{"used_percent":0.0,"window_minutes":10080,"resets_at":1784507145},"secondary":null,"plan_type":"pro","rate_limit_reached_type":null}}}
+        """#
+        XCTAssertNil(CodexRateLimitParser.parse(line: line))
     }
 
     func testMillisecondEpochDefensivelyHandled() throws {
