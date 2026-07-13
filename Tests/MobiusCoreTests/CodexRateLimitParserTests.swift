@@ -88,6 +88,20 @@ final class CodexRateLimitParserTests: XCTestCase {
         XCTAssertEqual(status.exhaustionHit()?.resetsAt, Date(timeIntervalSince1970: 1_784_501_289))
     }
 
+    /// 5시간 한도가 "돌아올" 때의 자동 반영 검증 — 현재 구조(주간=primary)에 5h가 secondary로
+    /// 추가되는 시나리오. 슬롯 위치가 뒤바뀌어도 window_minutes로 판정하므로 둘 다 정상 매핑.
+    func testFiveHourReturnInSecondarySlotIsMappedBack() throws {
+        let line = #"""
+        {"type":"event_msg","payload":{"type":"token_count","rate_limits":{"limit_id":"codex","limit_name":null,"primary":{"used_percent":50.0,"window_minutes":10080,"resets_at":1784501289},"secondary":{"used_percent":30.0,"window_minutes":300,"resets_at":1783861033},"rate_limit_reached_type":null}}}
+        """#
+        let status = try XCTUnwrap(CodexRateLimitParser.parse(line: line))
+        let usage = status.usageSnapshot(fetchedAt: Date(timeIntervalSince1970: 0))
+        XCTAssertEqual(usage.fiveHourPercent, 30.0)               // secondary(300분) → 5시간
+        XCTAssertEqual(usage.fiveHourResetsAt, Date(timeIntervalSince1970: 1_783_861_033))
+        XCTAssertEqual(usage.sevenDayPercent, 50.0)               // primary(10080분) → 주간
+        XCTAssertEqual(usage.sevenDayResetsAt, Date(timeIntervalSince1970: 1_784_501_289))
+    }
+
     /// 모델 전용 한도(limit_name 존재)는 계정 게이지·소진에서 제외 — 파서가 nil 반환.
     func testModelScopedLimitIsIgnored() {
         let line = #"""
