@@ -93,9 +93,19 @@ Sources/MobiusApp/        SwiftUI 메뉴바 앱 + AppState + Views/ + LoginFlow 
 - ★ **auth.json은 바쁜 파일** — 실행 중인 codex 세션들이 토큰 리프레시로 수시로 다시 쓴다
   (활성 세션 7개 상태에서 갱신 실측). mtime 신호 금지 — 값 이중 읽기로 안정성 판정.
 - **사용량이 세션 로그에 매 턴 in-band 포함**: `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`의
-  `event_msg`/`token_count` 이벤트마다 `rate_limits{primary{used_percent,window_minutes:300,
-  resets_at(epoch초)}, secondary{...,10080}, plan_type, rate_limit_reached_type(평시 null)}`.
+  `event_msg`/`token_count` 이벤트마다 `rate_limits{limit_id, limit_name, primary{used_percent,
+  window_minutes, resets_at(epoch초)}, secondary{...}, credits, plan_type,
+  rate_limit_reached_type(평시 null)}`.
   → 게이지도 네트워크 0으로 로그에서 얻는다 (Claude와 달리 usage 엔드포인트 불필요).
+- ★ **창 종류는 슬롯(primary/secondary)이 아니라 `window_minutes`로 판정하라** — 슬롯 위치는
+  고정이 아니다. 실측 2026-07-12: primary=5시간(300분)·secondary=주간(10080분)이었으나,
+  **실측 2026-07-13: OpenAI가 5시간 한도를 임시 제거 → primary=주간(10080분)·secondary=null**.
+  슬롯으로 매핑하면 주간이 "5시간" 게이지로 오표시된다(사용자 보고, 수정됨:
+  CodexRateLimitStatus.shortWindow<1440분 / weeklyWindow≥1440분).
+- ★ **모델 전용 한도는 `limit_name`으로 구분** — `limit_id:"codex_bengalfox",
+  limit_name:"GPT-5.3-Codex-Spark"` 같은 이벤트는 특정 모델 한도라 계정 게이지·소진에서
+  제외한다(계정 한도는 `limit_name==null`). Claude의 weekly_scoped(Fable)와 동일 취급 —
+  안 걸러내면 계정 창과 섞여 게이지 깜빡임·오소진. (모델별 게이지 노출은 후속 후보.)
 - **소진 판정은 이중화**: `rate_limit_reached_type != null`(값 형태 미실측 — 실소진 미관찰)
   **또는** `used_percent >= 100`. 리셋은 소진 창들 중 가장 늦은 resets_at.
 - ★ **로그에 계정 식별자가 없다**(session_meta에도 없음, 생성 시 1회만 기록 — 실측).
