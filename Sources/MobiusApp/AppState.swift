@@ -153,8 +153,33 @@ final class AppState: ObservableObject {
                 if isActive, let live = try? io.readLiveSnapshot() { blob = live.keychainBlob }
                 else { blob = (try? store.secret(for: profile.id))?.keychainBlob }
                 guard let blob else { continue }
+                // 비활성 계정의 저장 access 토큰이 만료됐으면 게이지를 못 읽어 얼어붙는다
+                // (429/401 → 조용히 continue). 폴백 refresh 기계로 미리 갱신한다 — 활성은
+                // check의 첫 guard가 절대 건드리지 않고, 회전 토큰은 원자 저장되며,
+                // refresh 토큰이 만료/폐기면 needsReauth로 마킹된다(계정당 access TTL≈1h라
+                // 갱신 후엔 만료 조건이 풀려 재-refresh가 자연히 멈춘다 = 스톰 없음).
+                var fetchBlob = blob
+                if !isActive, !profile.needsReauth,
+                   let exp = UsageFetcher.expiresAt(from: blob), exp <= now {
+                    switch await fallbackChecker.check(profile.id,
+                                                       activeAccountID: store.file.activeAccountID,
+                                                       now: now, allowNetwork: true) {
+                    case .refreshedAlive:
+                        if let fresh = (try? store.secret(for: profile.id))?.keychainBlob {
+                            fetchBlob = fresh
+                        }
+                    case .dead, .locallyDead, .noRefreshToken, .storeFailed:
+                        // refresh 토큰이 죽음 — check가 needsReauth를 켰다. 1회 알림 후 스킵.
+                        reauthChanged = true
+                        notify(title: loc("재로그인 필요"),
+                               body: loc("%@ 계정의 인증이 만료됐어요. 카드의 '다시 로그인'을 눌러주세요.", profile.nickname))
+                        continue
+                    case .transient, .notFallback, .noSecret:
+                        continue   // 갱신 실패/불가 — 이번 라운드는 게이지 유지(재시도)
+                    }
+                }
                 do {
-                    guard let snap = try await UsageFetcher.fetch(keychainBlob: blob)
+                    guard let snap = try await UsageFetcher.fetch(keychainBlob: fetchBlob)
                     else { continue }
                     usage[profile.id] = snap
                     // 조회 성공 = 토큰 살아있음 → 잘못 남은 재로그인 마킹 자가 해제
@@ -179,7 +204,7 @@ final class AppState: ObservableObject {
                     // - 활성 계정: 라이브 토큰으로 조회했는데도 거부 = 진짜 재로그인 필요.
                     // - 비활성 계정: 저장 토큰이 자연 만료(expiresAt 지남)면 정상 휴면이라 마킹 안 함
                     //   (전환하면 Claude Code가 갱신). 아직 유효기간인데 거부면 폐기된 것 → 마킹.
-                    let stillValid = (UsageFetcher.expiresAt(from: blob) ?? .distantPast) > Date()
+                    let stillValid = (UsageFetcher.expiresAt(from: fetchBlob) ?? .distantPast) > Date()
                     if (isActive || stillValid), !profile.needsReauth {
                         try? store.setNeedsReauth(profile.id, true)
                         reauthChanged = true
