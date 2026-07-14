@@ -133,7 +133,7 @@ mobius switch <name>               # 닉네임으로 전환 (중복 닉네임은
 mobius status                      # 프로바이더별 현재 활성 계정, 리셋까지 남은 시간
 mobius capture <name>              # 현재 claude 로그인 계정을 프로필로 등록
 mobius capture <name> --provider codex   # 현재 codex 로그인 계정을 등록
-mobius auto on|off                 # 자동 전환 켜기/끄기 (--provider claude|codex, 미지정 시 양쪽)
+mobius auto on|off                 # 자동 전환 켜기/끄기 (--provider claude|codex, 미지정 시 Claude)
 ```
 
 CLI로 전환해도 실행 중인 앱 화면에 즉시 반영됩니다.

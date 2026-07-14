@@ -328,7 +328,7 @@ Sources/MobiusApp/        SwiftUI 메뉴바 앱 + AppState + Views/ + LoginFlow 
 - **설정 UI 재구성 + 자동 전환 풀별 분리(2026-07-12,
   `docs/design/settings-ui-restructure-prep.md` R1~R6 구현)**: autoSwitchEnabled(전역) →
   `autoSwitchByProvider`(풀별, 구 키는 디코드 시 양쪽 풀 적용 + encode 시 Claude 값 병행
-  기록), 엔진/스토어/CLI(`mobius auto --provider`, 미지정 시 양쪽)/앱 전부 풀별 배선.
+  기록), 엔진/스토어/CLI(`mobius auto --provider`, 미지정 시 Claude=기존 동작 보존)/앱 전부 풀별 배선.
   설정 Form: 일반(언어/자동시작/게이지/mobius CLI pill 행) → 설치 현황(Claude·Codex CLI
   블록에 자동 전환 토글 + 등록 계정 요약 + 계정 추가) → 실험실(Desktop 토글 2개 + 리셋 프로브
   + 멀티 Mac 동기화 — upstream 기준 단일 experimental 섹션으로 통합) → 업데이트.

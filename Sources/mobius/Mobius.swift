@@ -148,7 +148,7 @@ struct Capture: ParsableCommand {
 struct Auto: ParsableCommand {
     static let configuration = CommandConfiguration(abstract: "자동 전환 켜기/끄기")
     @Argument(help: "on 또는 off") var mode: String
-    @Option(help: "claude 또는 codex — 미지정 시 양쪽 모두") var provider: String?
+    @Option(help: "claude 또는 codex — 미지정 시 Claude(기존 동작 보존)") var provider: String?
 
     func run() throws {
         let ctx = try makeContext()
@@ -158,12 +158,18 @@ struct Auto: ParsableCommand {
         case "off": enabled = false
         default: throw ValidationError("on 또는 off만 가능합니다.")
         }
-        let targets = try provider.map { [try parseProvider($0)] } ?? Provider.allCases
+        // 미지정 시 Claude만 — Codex 도입 이전 동작을 보존한다(기존 스크립트가 --provider 없이
+        // `mobius auto on`을 쓰면 예전처럼 Claude에만 적용). Codex는 --provider codex로 명시.
+        let targets = try provider.map { [try parseProvider($0)] } ?? [.claude]
         for target in targets {
             try ctx.store.setAutoSwitch(enabled, provider: target)
         }
         MobiusNotification.postAccountsChanged()
         let names = targets.map(\.displayName).joined(separator: "·")
         print("\(names) 자동 전환: \(enabled ? "켜짐" : "꺼짐")")
+        // 미지정인데 Codex 계정이 있으면 Codex는 안 바뀐다는 걸 알려 발견성을 높인다.
+        if provider == nil, !ctx.store.file.accounts(of: .codex).isEmpty {
+            print("(Codex는 바뀌지 않았습니다 — `mobius auto \(mode) --provider codex`로 지정)")
+        }
     }
 }
