@@ -72,6 +72,11 @@ final class AppState: ObservableObject {
     static let proactiveRefreshSweepInterval: TimeInterval = 3600
     static let proactiveRefreshRenewWindow: TimeInterval = 3 * 24 * 3600
     static let proactiveRefreshPerAccountGate: TimeInterval = 6 * 3600
+    // 만료 토큰 게이지용 refresh(reactive)의 계정당 재시도 쿨다운 — transient(네트워크/5xx)
+    // 실패 시 usage 캐시가 안 갱신돼 계속 stale로 남으므로, 이게 없으면 팝오버를 여닫을
+    // 때마다 회전 시도가 반복된다. 성공하면 즉시 해제(exp가 미래로 풀려 재진입도 자연히 멈춤).
+    private var lastUsageRefreshAttemptAt: [UUID: Date] = [:]
+    static let usageRefreshRetryCooldown: TimeInterval = 600
 
     init() {
         let env = MobiusEnvironment.live()
@@ -171,10 +176,17 @@ final class AppState: ObservableObject {
                 var fetchBlob = blob
                 if !isActive, !profile.needsReauth,
                    let exp = UsageFetcher.expiresAt(from: blob), exp <= now {
+                    // 계정당 쿨다운: 최근 시도가 있으면 이번 라운드는 아예 건너뛴다(만료 토큰이라
+                    // 어차피 게이지도 못 읽는다). transient 실패가 팝오버마다 회전 시도로 반복되지
+                    // 않게 하는 것 — 첫 시도는 게이팅 안 됨(distantPast)이라 프리즈 해소는 유지.
+                    guard now.timeIntervalSince(lastUsageRefreshAttemptAt[profile.id] ?? .distantPast)
+                            >= Self.usageRefreshRetryCooldown else { continue }
+                    lastUsageRefreshAttemptAt[profile.id] = now
                     switch await fallbackChecker.check(profile.id,
                                                        activeAccountID: store.file.activeAccountID,
                                                        now: now, allowNetwork: true) {
                     case .refreshedAlive:
+                        lastUsageRefreshAttemptAt[profile.id] = nil   // 성공 — 쿨다운 해제
                         if let fresh = (try? store.secret(for: profile.id))?.keychainBlob {
                             fetchBlob = fresh
                         }
@@ -185,7 +197,7 @@ final class AppState: ObservableObject {
                                body: loc("%@ 계정의 인증이 만료됐어요. 카드의 '다시 로그인'을 눌러주세요.", profile.nickname))
                         continue
                     case .transient, .notFallback, .noSecret:
-                        continue   // 갱신 실패/불가 — 이번 라운드는 게이지 유지(재시도)
+                        continue   // 갱신 실패/불가 — 쿨다운 뒤 재시도
                     }
                 }
                 do {
