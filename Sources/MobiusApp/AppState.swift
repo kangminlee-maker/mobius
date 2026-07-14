@@ -93,6 +93,16 @@ final class AppState: ObservableObject {
                                  extraIOs: [codexIO])
         self.watcher = SessionLogWatcher(env: env)
         self.codexWatcher = SessionLogWatcher.codex(env: env)
+        // 구버전 바이너리가 accounts.json을 저장하며 per-account provider를 드롭했다면 Codex 계정이
+        // Claude 풀로 흡수돼 매 틱 자격증명 디코드 실패로 degraded 상태가 된다. secret이 provider의
+        // authority이므로 로드 직후 진짜 provider로 되돌리고, 되돌린 게 있으면 사용자에게 경고한다.
+        if let reassigned = try? switcher.healMisassignedProviders(), !reassigned.isEmpty {
+            let names = reassigned
+                .map { "\($0.nickname) (\($0.from.displayName)→\($0.to.displayName))" }
+                .joined(separator: ", ")
+            let warn = loc("구버전이 저장한 계정 목록에서 프로바이더 정보가 소실돼 복구했습니다: %@", names)
+            initError = initError.map { "\($0)\n\(warn)" } ?? warn
+        }
         self.file = store.file
         self.lastError = initError
 

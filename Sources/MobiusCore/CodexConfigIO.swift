@@ -63,10 +63,16 @@ public struct CodexConfigIO: ProviderConfigIO {
     /// 빈 파일·손상·타 프로바이더 바이트(Claude 스냅샷 JSON)는 여기서 거부되고,
     /// 신원 없는 원본(API 키 전용)의 롤백 원복은 통과한다.
     public func writeLiveSecretData(_ data: Data) throws {
-        guard let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-              obj["tokens"] != nil || obj["auth_mode"] != nil || obj["OPENAI_API_KEY"] != nil
-        else { throw CodexConfigError.unrecognizedSecret }
+        guard recognizesSecret(data) else { throw CodexConfigError.unrecognizedSecret }
         try writeAtomic(data, to: env.codexAuthFile, mode: 0o600)
+    }
+
+    /// auth.json의 실측 최상위 키(auth_mode/tokens/OPENAI_API_KEY) 중 하나라도 있으면 Codex 형태.
+    /// Claude secret(CredentialsSnapshot JSON)엔 이 키들이 없어 확실히 구분된다.
+    public func recognizesSecret(_ data: Data) -> Bool {
+        guard let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        else { return false }
+        return obj["tokens"] != nil || obj["auth_mode"] != nil || obj["OPENAI_API_KEY"] != nil
     }
 
     // MARK: 신원 추출 (auth.json → id_token JWT payload)

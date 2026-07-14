@@ -38,6 +38,12 @@ public protocol ProviderConfigIO: Sendable {
 
     /// 저장된 secret data를 라이브에 반영한다. 원자적이어야 하며 실패 시 throw.
     func writeLiveSecretData(_ data: Data) throws
+
+    /// 주어진 secret 바이트가 이 프로바이더의 자격증명 형태인가. 구버전 바이너리가
+    /// accounts.json을 저장하며 per-account `provider`를 드롭해도(구 구조체엔 필드 없음)
+    /// secret 파일은 그대로 남으므로, secret 형태가 진짜 provider의 authority다 —
+    /// Switcher.healMisassignedProviders가 소실된 provider를 이걸로 재도출한다.
+    func recognizesSecret(_ data: Data) -> Bool
 }
 
 extension ProviderConfigIO {

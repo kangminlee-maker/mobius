@@ -6,6 +6,14 @@ public enum SwitcherError: Error, Equatable {
     case unsupportedProvider(Provider)
 }
 
+/// 소실됐던 provider를 secret 형태로 재도출해 되돌린 기록 (사용자 경고용).
+public struct ProviderReassignment: Equatable, Sendable {
+    public let id: UUID
+    public let nickname: String
+    public let from: Provider
+    public let to: Provider
+}
+
 /// 계정 전환 엔진. 순서: 라이브 되저장 → 대상 기록 → 실패 시 롤백.
 /// 프로바이더별 라이브 IO는 ProviderConfigIO 어댑터가 담당하고,
 /// Switcher는 등록된 어댑터의 풀들에 같은 전환/adopt/reconcile 규칙을 적용한다.
@@ -27,6 +35,29 @@ public final class Switcher: @unchecked Sendable {
     /// 등록된 어댑터들 — 프로바이더 rawValue 순으로 결정적 순회.
     private var orderedIOs: [(Provider, any ProviderConfigIO)] {
         ios.sorted { $0.key.rawValue < $1.key.rawValue }
+    }
+
+    /// 구버전 바이너리가 accounts.json을 저장하며 per-account `provider`를 드롭하면(구 구조체엔
+    /// 필드 없음), 다음 신버전 로드에서 그 계정이 `?? .claude`로 흡수돼 엉뚱한 풀에서 자격증명
+    /// 디코드 실패 → 매 틱 롤백(degraded)한다. secret 바이트는 provider의 authority이므로,
+    /// 각 계정의 저장 secret을 등록 어댑터들에 물어 진짜 provider를 재도출해 프로필을 되돌린다.
+    /// **정확히 하나의 다른 프로바이더만** 그 secret을 인식할 때만 고친다(오정정 방지 —
+    /// claimed 어댑터가 인식하면 정상이라 건드리지 않고, 아무도/여럿이 인식하면 애매하므로 보류).
+    /// 되돌린 계정 목록을 반환한다 — 앱은 이를 사용자에게 경고한다. 로드 직후 1회 호출.
+    @discardableResult
+    public func healMisassignedProviders() throws -> [ProviderReassignment] {
+        var fixed: [ProviderReassignment] = []
+        for account in store.file.accounts {
+            guard let claimedIO = ios[account.provider] else { continue }
+            guard let data = try? store.secretData(for: account.id), !data.isEmpty else { continue }
+            if claimedIO.recognizesSecret(data) { continue } // 형태 일치 — 정상 계정
+            let matches = ios.filter { $0.key != account.provider && $0.value.recognizesSecret(data) }
+            guard matches.count == 1, let actual = matches.first?.key else { continue }
+            try store.update(account.id) { $0.provider = actual }
+            fixed.append(ProviderReassignment(id: account.id, nickname: account.nickname,
+                                              from: account.provider, to: actual))
+        }
+        return fixed
     }
 
     /// 현재 라이브 상태를, (provider, email)이 일치하는 프로필에 되저장한다.

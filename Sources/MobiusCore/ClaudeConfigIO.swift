@@ -137,4 +137,10 @@ extension ClaudeConfigIO: ProviderConfigIO {
     public func writeLiveSecretData(_ data: Data) throws {
         try writeLiveSnapshot(try JSONDecoder().decode(CredentialsSnapshot.self, from: data))
     }
+
+    /// Claude secret은 CredentialsSnapshot JSON이다 — 디코드되면 Claude 형태.
+    /// Codex auth.json(keychainBlob/credentialsFileData 키 없음)은 여기서 디코드 실패한다.
+    public func recognizesSecret(_ data: Data) -> Bool {
+        (try? JSONDecoder().decode(CredentialsSnapshot.self, from: data)) != nil
+    }
 }

@@ -127,4 +127,43 @@ final class CodexSwitcherTests: XCTestCase {
         try await switcher.reconcile()
         XCTAssertEqual(store.file.activeByProvider[.codex], a.id) // 그대로
     }
+
+    /// 구버전 바이너리가 accounts.json을 저장하며 per-account provider를 드롭 → 신버전이
+    /// Codex 계정을 Claude로 흡수 → secret authority로 재도출해 되돌린다 (감지+복구+경고 근거).
+    func testHealRestoresProviderLostByOldBinarySave() throws {
+        let codex = try registerCodex("cx", email: "cx@corp.com",
+                                      data: CodexFixtures.authJSON(email: "cx@corp.com"))
+        let claude = try store.upsertProfile(nickname: "cl",
+                                             snapshot: claudeSnap(email: "cl@x.com", tok: "t1"))
+
+        // 구버전 저장 시뮬레이션: per-account "provider" 키 드롭(구 구조체엔 필드 없음).
+        let url = env.accountsFile
+        var root = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
+        var accts = root["accounts"] as! [[String: Any]]
+        for i in accts.indices { accts[i].removeValue(forKey: "provider") }
+        root["accounts"] = accts
+        try JSONSerialization.data(withJSONObject: root).write(to: url)
+
+        // 신버전 재로드 → provider 없는 계정은 ?? .claude 로 흡수 (재현 전제)
+        let store2 = try AccountStore(env: env, keychain: kc)
+        XCTAssertEqual(store2.file.accounts.first { $0.id == codex.id }?.provider, .claude)
+        let switcher2 = Switcher(env: env, keychain: kc, store: store2, io: io, extraIOs: [codexIO])
+
+        let fixed = try switcher2.healMisassignedProviders()
+
+        XCTAssertEqual(fixed.count, 1)
+        XCTAssertEqual(fixed.first?.id, codex.id)
+        XCTAssertEqual(fixed.first?.from, .claude)
+        XCTAssertEqual(fixed.first?.to, .codex)
+        // Codex는 복구, Claude는 그대로(오정정 없음)
+        XCTAssertEqual(store2.file.accounts.first { $0.id == codex.id }?.provider, .codex)
+        XCTAssertEqual(store2.file.accounts.first { $0.id == claude.id }?.provider, .claude)
+
+        // 영속 + 멱등: 다시 로드/heal해도 복구 유지, 추가 변경 없음
+        let store3 = try AccountStore(env: env, keychain: kc)
+        XCTAssertEqual(store3.file.accounts.first { $0.id == codex.id }?.provider, .codex)
+        let again = try Switcher(env: env, keychain: kc, store: store3, io: io,
+                                 extraIOs: [codexIO]).healMisassignedProviders()
+        XCTAssertTrue(again.isEmpty)
+    }
 }
