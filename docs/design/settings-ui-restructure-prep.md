@@ -10,7 +10,7 @@
 
 ## 고정 상태 (다음 세션에서 먼저 재검증)
 
-- 레포: `/Users/kangmin/Documents/mobius`, branch `main`, HEAD `7ba6e68`
+- 레포: `<repo>`, branch `main`, HEAD `7ba6e68`
   **+ 미커밋 작업트리** (Codex 지원 전체 + 설정 '설치 현황' 1차 개편, 약 25파일 ±850/−280).
   `git status --short`로 확인. 커밋 여부는 사용자에게 확인 (권장: 이 상태로 1커밋 후 진행).
 - 배포: `/Applications/Mobius.app`은 이 작업트리 기준 최신 빌드로 교체·실행 중.
@@ -119,7 +119,7 @@ R6. [신규] **용어 변경**: 사용자 노출 표기에서 '자동 fallback' 
 
 - **회사 codex 계정 재로그인 대기**: 스냅샷 토큰 revoked(클로버+회전, CLAUDE.md 핵심 사실
   참조). 사용자가 `codex logout && codex login`(회사 계정) 후 → 즉시 프로브 턴으로 게이지
-  생성·스냅샷 신선도 확보 필요. 재로그인 전까지 codex 활성은 kangmin.lee.n(정상 동작).
+  생성·스냅샷 신선도 확보 필요. 재로그인 전까지 codex 활성은 account-A(정상 동작).
 - 실소진 이벤트(rate_limit_reached_type) fixture 미확보 — 첫 실소진 때 수집.
 - 작업트리 미커밋 — 커밋 메시지 제안: "feat: Codex 계정 지원 (프로바이더별 풀) + 설정 설치 현황".
 

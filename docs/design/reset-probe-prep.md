@@ -11,7 +11,7 @@
 
 ## 전제 실측 (2026-07-12, 이 문서의 근거)
 
-1. **Claude 5h 창은 첫 호출 전까지 미정** — 유휴 계정(kangmin.lee.n)의 usage 응답:
+1. **Claude 5h 창은 첫 호출 전까지 미정** — 유휴 계정(account-A)의 usage 응답:
    `five_hour: {utilization: 0.0, resets_at: null}`. 전제 성립.
 2. **주간 창은 유휴여도 확정돼 있음** — 같은 계정에서 `seven_day.resets_at` 존재.
    주간 창은 7일 완전 유휴가 아닌 한 항상 진행 중 → **프로브의 주 대상은 5h 창**
@@ -73,7 +73,7 @@ Experimental 섹션(최하단)에 토글 추가:
 
 ## 게이트 실측 결과 (2026-07-12, 사용자 승인 하에 실호출 — 구현 시 재검증 불필요)
 
-### G1 (Claude) — 통과. kangmin.lee.n(5h 유휴, resets_at null 전 검사 = 음성 대조)
+### G1 (Claude) — 통과. account-A(5h 유휴, resets_at null 전 검사 = 음성 대조)
 
 - **시스템 프롬프트 불필요**: `/v1/messages` + `Authorization: Bearer` +
   `anthropic-beta: oauth-2025-04-20` + `anthropic-version: 2023-06-01`로
@@ -87,7 +87,7 @@ Experimental 섹션(최하단)에 토글 추가:
 - ★ **반영 지연**: 호출 +3초엔 여전히 null, +30초엔 확정 — 프로브 후 usage 재조회는
   **지연 재시도 필요(+15s/+30s/+60s 폴링)**.
 
-### G2 (Codex) — 통과. 활성 계정 kangmin.lee.n@gmail.com에서 `codex exec` 최소 턴
+### G2 (Codex) — 통과. 활성 계정 account-A@example.com에서 `codex exec` 최소 턴
 
 - 커맨드: `codex exec --json --skip-git-repo-check -s read-only
   -c model_reasoning_effort="low" "Reply with exactly: ok"` — 정상 완료.

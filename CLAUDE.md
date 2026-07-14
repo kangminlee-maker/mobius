@@ -305,6 +305,27 @@ Sources/MobiusApp/        SwiftUI 메뉴바 앱 + AppState + Views/ + LoginFlow 
     returnTo를 claude.ai 기준 상대 경로로 해석하므로, selectAccountURL()은 `/cai`
     접두사를 벗겨 정식 경로로 매핑해야 한다 (안 벗기면 claude.ai/cai/… 404, 실측).
 
+## upstream 협업 / 기여 게이트
+
+이 레포는 포크(kangminlee-maker)이며 활발한 upstream(chussum/mobius)에 기여한다. upstream
+메인테이너 리뷰(issue #1)에서 드러난 원칙 — 기여/PR 전 반드시 지킬 것:
+
+- **기술적 가능 ≠ 정책적 허용**: usage는 GET(읽기)까지가 의도적 선. OAuth 토큰으로 POST(예:
+  `/v1/messages` 자동 호출)는 질적으로 다른 사용 — "200이 온다"는 관측이 허용을 뜻하지 않는다.
+  계정 밴이 최악 결과라 침습적 자동 호출은 opt-in이어도 신중히(리셋 프로브가 이 이유로 upstream 제외).
+- **authority·풀 경계 존중**: 프로바이더 풀은 독립 — 핀/전환/상태는 풀별 스코프. 한 풀 연산이
+  다른 풀 상태를 건드리면 안 된다(예: `setUserPinned` 풀 경계).
+- **하위호환·버전 혼용 대비**: 지속화 구조 변경은 관대한 디코딩 + 마이그레이션 테스트 필수(실패기록
+  13). 앱/CLI 버전이 어긋날 수 있어 "문서화만"으론 부족 — 감지+경고+테스트로 방어(실패기록 참고).
+- **작게 쪼갠 리뷰 가능한 PR**: 독립 버그픽스 → 코어 → UI 순 분할. 큰 뭉치 지양.
+- **계정 보호 민감 지점 명시**: OAuth refresh가 일어나는 지점은 이 파일의 트리거 목록으로 관리 —
+  트리거가 늘거나 바뀌는 변경은 PR 본문에 한 줄 짚는다.
+- **UX 후퇴·최소 놀람 금지**: 온보딩 클릭 수, 기존 CLI/스크립트 기본 동작을 바꾸지 않는다(바꾸면 명시).
+- **개인정보 정리**: upstream에 올리는 문서(docs/design 등)에서 로컬 경로·서명 정체성·실계정명·
+  이메일을 익명화(memory `pii-anonymize-before-public` 원칙).
+- **실측이 결정 포인트**: 방향이 갈리는 판단은 추측이 아니라 실측으로 확정(예: P3=extra-usage
+  override 판정). 리뷰 findings·전제도 실제 코드/데이터로 재확인 후 반영.
+
 ## QA / 진행 상황
 
 - `docs/qa/m1-checklist.md` 수동 QA: 2·3·6·7·9·10 완료(2026-07-11). 남은 항목: 1·4·5·8.
