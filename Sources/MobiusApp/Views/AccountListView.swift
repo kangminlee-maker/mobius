@@ -154,11 +154,24 @@ struct AccountListView: View {
     }
 
     private var emptyView: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 10) {
             Image(systemName: "infinity").font(.system(size: 28)).foregroundStyle(.tertiary)
             Text(loc("등록된 계정이 없습니다")).font(.system(size: 12)).foregroundStyle(.secondary)
-            Text(loc("설정(⚙)의 설치 현황에서 계정을 추가하세요"))
-                .font(.system(size: 10)).foregroundStyle(.tertiary)
+            // 1클릭 온보딩 — 설정 경유 없이 Claude 로그인 플로우를 바로 시작한다.
+            // (CLI 미설치면 addAccount가 설정에서 설치하도록 안내.)
+            Button { state.addAccount() } label: {
+                Label(loc("Claude 계정 추가"), systemImage: "plus.circle.fill")
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            // Codex(터미널 adopt)·CLI 설치 등은 설정에서
+            Button(loc("설정에서 추가 (Codex 포함)")) {
+                NSApp.activate(ignoringOtherApps: true)
+                openSettings()
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 10)).foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 24)
     }
