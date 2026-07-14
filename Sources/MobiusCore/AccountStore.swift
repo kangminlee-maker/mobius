@@ -225,13 +225,18 @@ public final class AccountStore: @unchecked Sendable {
         try save()
     }
 
-    /// 지정 계정에만 사용자 핀을 세운다(나머지는 해제). 수동 전환 시 호출 —
+    /// 지정 계정에만 사용자 핀을 세운다(같은 프로바이더 풀의 나머지는 해제). 수동 전환 시 호출 —
     /// 모델 전용 한도(Fable 등)로 이 계정을 자동으로 밀어내지 않게 한다.
-    /// (Codex 풀은 modelScoped 한도가 없어 핀이 동작에 영향을 주지 않으므로 전역 clear로 무해.)
+    /// ★ 핀 해제는 반드시 같은 풀로 한정한다 — 전역 clear는 Codex 계정을 수동 전환할 때
+    ///   사용자가 골라둔 Claude 계정의 핀까지 풀어 modelScoped 한도에서 의도치 않은 자동 전환을
+    ///   유발한다(풀은 독립이므로 핀도 풀별 독립이어야 한다).
     public func setUserPinned(_ id: UUID) throws {
         lock.lock(); defer { lock.unlock() }
+        guard let provider = file.accounts.first(where: { $0.id == id })?.provider else {
+            throw AccountStoreError.unknownAccount
+        }
         var changed = false
-        for i in file.accounts.indices {
+        for i in file.accounts.indices where file.accounts[i].provider == provider {
             let want = file.accounts[i].id == id
             if file.accounts[i].userPinned != want { file.accounts[i].userPinned = want; changed = true }
         }

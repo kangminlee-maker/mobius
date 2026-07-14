@@ -64,6 +64,36 @@ final class AccountStoreTests: XCTestCase {
             try store.moveFallback(provider: .claude, fromIndex: 0, toIndex: 1))
     }
 
+    func testSetUserPinnedIsScopedToProviderPool() throws {
+        let store = try AccountStore(env: env, keychain: kc)
+        let claudeA = try store.upsertProfile(nickname: "cA", snapshot: snap(email: "a@x.com"))
+        _ = try store.upsertProfile(nickname: "cB", snapshot: snap(email: "b@x.com"))
+        let codex = try store.upsertProfile(
+            nickname: "x", provider: .codex,
+            identity: ProviderIdentity(emailAddress: "x@o.com", organizationName: "",
+                                       tierDescription: "Pro"),
+            secretData: Data("codex".utf8))
+        func pinned(_ id: UUID) -> Bool { store.file.accounts.first { $0.id == id }!.userPinned }
+
+        // Claude 풀에서 A를 핀
+        try store.setUserPinned(claudeA.id)
+        XCTAssertTrue(pinned(claudeA.id))
+
+        // Codex 계정을 수동 전환(핀)해도 다른 풀(Claude)의 핀은 유지돼야 한다 (구코드=전역 clear면 깨짐)
+        try store.setUserPinned(codex.id)
+        XCTAssertTrue(pinned(claudeA.id), "Codex 핀이 Claude 풀의 핀을 풀면 안 된다")
+        XCTAssertTrue(pinned(codex.id))
+
+        // 같은 풀 내 배타성은 유지 — cB를 핀하면 cA는 풀리고 Codex 핀은 그대로
+        let cB = store.file.accounts.first { $0.nickname == "cB" }!
+        try store.setUserPinned(cB.id)
+        XCTAssertFalse(pinned(claudeA.id))
+        XCTAssertTrue(pinned(cB.id))
+        XCTAssertTrue(pinned(codex.id), "Codex 핀은 계속 유지")
+
+        XCTAssertThrowsError(try store.setUserPinned(UUID())) // 미등록 계정
+    }
+
     func testSetPrimaryPromotesAndDemotesOldPrimary() throws {
         let store = try AccountStore(env: env, keychain: kc)
         _ = try store.upsertProfile(nickname: "primary", snapshot: snap(email: "a@x.com"))
