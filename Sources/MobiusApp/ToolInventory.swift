@@ -8,7 +8,7 @@ enum ToolInventory {
     struct AppInfo: Equatable { var path: String; var version: String }
 
     /// 로그인 셸(zsh -lc)로 CLI를 찾는다 — GUI 앱의 최소 PATH 대신 사용자 PATH를 쓴다
-    /// (실패 기록 13: GUI 셸은 .zshrc를 읽지 않아 bare 명령이 실패할 수 있다).
+    /// (실패 기록 15: GUI 셸은 .zshrc를 읽지 않아 bare 명령이 실패할 수 있다).
     /// 알려진 설치 경로도 함께 확인한다.
     static func locateCLI(_ binary: String, fallbackPaths: [String]) -> CLIInfo? {
         if let out = runLoginShell(

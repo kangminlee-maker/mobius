@@ -279,18 +279,6 @@ Sources/MobiusApp/        SwiftUI 메뉴바 앱 + AppState + Views/ + LoginFlow 
     하위호환 디코딩 + 마이그레이션 테스트를 동반한다. (2) "빈 폴백 후 저장"은 조용한
     데이터 파괴 경로다 — 로드 실패 시 원본을 먼저 지켜라. (3) 개발자는 잦은 빌드로 이 경로를
     바로 밟지만, **업데이트만 하는 사용자에게 그대로 터진다** — 릴리스 전 구파일 로드 필수 확인.
-14. **"계정 추가"가 앱에서만 실패, 터미널 재현은 통과하는 착시** — GUI 앱이 띄우는
-    `zsh -lc`(비대화형 로그인 셸)는 `.zshrc`를 읽지 않으므로, claude의 PATH 추가가
-    `.zshrc`에만 있는 환경(예: `~/.local/bin`)에선 bare `claude`가 command not found로
-    즉사 → "로그인 URL을 얻지 못했습니다". 개발자 터미널 재현은 사용자 셸 PATH를
-    물려받아 통과해버린다. → LoginFlow는 `ClaudeCLI.locate()` 절대 경로로 실행.
-    앱 조건 재현은 `env -i HOME=... PATH=/usr/bin:/bin:... /bin/zsh -lc ...`로 할 것.
-15. **claude 2.1.207의 authorize URL은 별칭 — returnTo에 `/cai`를 실으면 로그인 후 404** —
-    CLI가 브라우저로 여는 `claude.com/cai/oauth/authorize`는 `claude.ai/oauth/authorize`로
-    307 포워딩되는 별칭이다(쿼리 보존, curl 실측). login 페이지는 claude.ai에 살고
-    returnTo를 claude.ai 기준 상대 경로로 해석하므로, selectAccountURL()은 `/cai`
-    접두사를 벗겨 정식 경로로 매핑해야 한다 (안 벗기면 claude.ai/cai/… 404, 실측).
-
 14. **폴백 refresh 400을 "토큰 만료"로 오귀인할 뻔 — 범인은 URLSession UA와 빈 토큰** —
     폴백 로그인 검증용 OAuth refresh가 계속 **400 `invalid_request_error` "Invalid request
     format"** 을 받았다. "토큰 만료 아니냐"는 추측이 자연스러웠지만 만료면 `invalid_grant`다
@@ -302,6 +290,18 @@ Sources/MobiusApp/        SwiftUI 메뉴바 앱 + AppState + Views/ + LoginFlow 
     invalid_grant는 원인이 딴판). (2) URLSession vs 참조 클라이언트(python/curl)를 **더미 자격으로**
     비교하면 형식/헤더 문제를 계정 위험 없이 격리할 수 있다. (3) 저장 스냅샷은 **빈 필드**로도 손상될
     수 있으니 `!isEmpty` 가드로 nil 취급해 재로그인 유도.
+15. **"계정 추가"가 앱에서만 실패, 터미널 재현은 통과하는 착시** — GUI 앱이 띄우는
+    `zsh -lc`(비대화형 로그인 셸)는 `.zshrc`를 읽지 않으므로, claude의 PATH 추가가
+    `.zshrc`에만 있는 환경(예: `~/.local/bin`)에선 bare `claude`가 command not found로
+    즉사 → "로그인 URL을 얻지 못했습니다". 개발자 터미널 재현은 사용자 셸 PATH를
+    물려받아 통과해버린다. → LoginFlow는 절대 경로로 해석해 실행(`resolveClaudeBinary`:
+    표준 경로 우선 + `zsh -ilc` 대화형 폴백; 설정 표시는 `ToolInventory.locateCLI`).
+    앱 조건 재현은 `env -i HOME=... PATH=/usr/bin:/bin:... /bin/zsh -lc ...`로 할 것.
+16. **claude 2.1.207의 authorize URL은 별칭 — returnTo에 `/cai`를 실으면 로그인 후 404** —
+    CLI가 브라우저로 여는 `claude.com/cai/oauth/authorize`는 `claude.ai/oauth/authorize`로
+    307 포워딩되는 별칭이다(쿼리 보존, curl 실측). login 페이지는 claude.ai에 살고
+    returnTo를 claude.ai 기준 상대 경로로 해석하므로, selectAccountURL()은 `/cai`
+    접두사를 벗겨 정식 경로로 매핑해야 한다 (안 벗기면 claude.ai/cai/… 404, 실측).
 
 ## QA / 진행 상황
 
@@ -349,6 +349,10 @@ Sources/MobiusApp/        SwiftUI 메뉴바 앱 + AppState + Views/ + LoginFlow 
   파서는 `RateLimitHit.kind=monthlySpend`로 구분만 하고 앱이 usage로 5h/주간을 교차
   확인해 진짜 소진만 실제 리셋 시각으로 기록(`UsageSnapshot.exhaustionHit` — Codex와
   동일 의미론). 정정 기록: `docs/spike/rate-limit-format.md`.
+  ★ **[정정 2026-07-14] P3 = 프리미엄 모델(Fable) 지출 한도** — 실측(사용자): P3 계정은
+  Fable이 막히고 창 여유 시 저가 모델만 동작. → 방향 재설정: **비핀 계정은 폴백 이동(프리미엄
+  유지)·핀 계정은 머묾**. 현재 "여유면 무시"는 비핀 프리미엄 유지가 안 됨 — monthly-spend PR에서
+  핀 인지 전환 + `exhaustionHit`의 modelScoped 보존과 함께 구현(A3).
 - 후속 후보: accounts.json 파일 락, 세션 로그 기반 인증 에러 감지, Codex 재로그인 감지,
   usage `limits[]`의 모델 스코프 주간 한도(weekly_scoped) 게이지 노출.
 - 2차 프로젝트(합의): 멀티 PC ~/.claude 세션 동기화 — 자격증명 제외, 별도 스펙.
