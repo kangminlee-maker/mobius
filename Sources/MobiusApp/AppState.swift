@@ -675,8 +675,9 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// 월간 지출 한도(P3) 이벤트의 교차 확인 — usage로 5h/주간 창 현황을 봐서
-    /// 진짜 창 소진이면 실제 리셋 시각으로 기록하고, 여유면 무시한다.
+    /// 월 지출(P3, extra-usage) 한도 이벤트의 교차 확인 — 이 메시지는 표시 우선순위(override)라
+    /// 실제 막힌 한도의 신뢰 신호가 아니므로, usage로 5h/주간 창을 교차확인해 진짜 창 소진이면
+    /// 실제 리셋 시각으로 기록하고 창 여유면 무시한다(applyVerifiedExhaustion).
     /// P3는 짧은 폭주로 온다(실측: 30초에 15개 세션 파일) — 캐시 우선 + 단일 인플라이트로
     /// 네트워크 호출을 억제하고, 이미 소진 기록이 있으면 건너뛴다.
     private var spendVerifyTask: Task<Void, Never>?
@@ -690,10 +691,17 @@ final class AppState: ObservableObject {
             await applyVerifiedExhaustion(cached, accountID: accountID, now: now)
             return
         }
-        guard let secret = try? store.secret(for: accountID) else { return }
+        // 활성 계정은 라이브 토큰으로 조회한다 — 저장 스냅샷은 앱 시작 직후 만료 토큰일 수 있고
+        // (claude CLI가 라이브를 갱신), P3는 활성 계정 세션 로그에서 오므로 대개 활성 계정이다.
+        let blob: Data
+        if store.file.activeAccountID == accountID, let live = try? io.readLiveSnapshot() {
+            blob = live.keychainBlob
+        } else if let secret = try? store.secret(for: accountID) {
+            blob = secret.keychainBlob
+        } else { return }
         spendVerifyTask = Task { @MainActor in
             defer { spendVerifyTask = nil }
-            guard let snap = try? await UsageFetcher.fetch(keychainBlob: secret.keychainBlob)
+            guard let snap = try? await UsageFetcher.fetch(keychainBlob: blob)
             else { return }
             usage[accountID] = snap
             await applyVerifiedExhaustion(snap, accountID: accountID, now: Date())
@@ -701,7 +709,12 @@ final class AppState: ObservableObject {
     }
 
     private func applyVerifiedExhaustion(_ snap: UsageSnapshot, accountID: UUID, now: Date) async {
-        guard let hit = snap.exhaustionHit(now: now) else { return } // 창 여유 — 크레딧 한도만
+        // P3(extra-usage 월 지출 한도) 메시지는 표시 우선순위(override)라 "무엇이 막혔는지"의
+        // 신뢰 신호가 아니다(extra-usage가 차면 실제 원인인 다른 한도를 가린다 — 사용자 정정).
+        // → usage로 5h/주간 창을 교차확인해 진짜 창 소진이면 실제 리셋 시각으로 기록하고,
+        // 창 여유면 무시한다(계정은 창 안에서 계속 사용 가능). 프리미엄 유지 전환은 P3가 아니라
+        // 모델 스코프 한도(scopedLimits/Fable) 기반으로 판단해야 하며 별도 후속이다.
+        guard let hit = snap.exhaustionHit(now: now) else { return }
         recordHit(hit, on: accountID, now: now)
         await apply(engines[.claude]!.onRateLimitHit(file: store.file, hit: hit, now: now),
                     provider: .claude, now: now)

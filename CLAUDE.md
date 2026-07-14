@@ -351,10 +351,13 @@ Sources/MobiusApp/        SwiftUI 메뉴바 앱 + AppState + Views/ + LoginFlow 
   파서는 `RateLimitHit.kind=monthlySpend`로 구분만 하고 앱이 usage로 5h/주간을 교차
   확인해 진짜 소진만 실제 리셋 시각으로 기록(`UsageSnapshot.exhaustionHit` — Codex와
   동일 의미론). 정정 기록: `docs/spike/rate-limit-format.md`.
-  ★ **[정정 2026-07-14] P3 = 프리미엄 모델(Fable) 지출 한도** — 실측(사용자): P3 계정은
-  Fable이 막히고 창 여유 시 저가 모델만 동작. → 방향 재설정: **비핀 계정은 폴백 이동(프리미엄
-  유지)·핀 계정은 머묾**. 현재 "여유면 무시"는 비핀 프리미엄 유지가 안 됨 — monthly-spend PR에서
-  핀 인지 전환 + `exhaustionHit`의 modelScoped 보존과 함께 구현(A3).
+  ★ **[정정 2026-07-14] P3 = extra-usage(크레딧) 월 지출 한도 — 표시 우선순위 override** —
+  사용자 정정: 프리미엄(Fable)은 **자기 별도 한도**로 막히고, extra-usage 한도가 차면 그 메시지가
+  실제 원인(Fable·다른 한도)을 **가리는 override**로 뜬다(Fable 전용 아님). 따라서 P3 문구는
+  "무엇이 막혔는지"의 신뢰 신호가 아니다 → `applyVerifiedExhaustion`은 usage로 5h/주간 창을
+  교차확인해 **진짜 창 소진만 기록하고 창 여유면 무시**(교차확인은 활성 계정 라이브 토큰 사용).
+  프리미엄 유지 전환은 P3가 아니라 **모델 스코프 한도(usage scopedLimits/Fable) 소진**을 신뢰
+  신호로 삼는 별도 후속. (앞서 'P3=프리미엄 한도'로 오판해 비핀 전환을 넣었다가 이 정정으로 되돌림.)
 - 후속 후보: accounts.json 파일 락, 세션 로그 기반 인증 에러 감지, Codex 재로그인 감지,
   usage `limits[]`의 모델 스코프 주간 한도(weekly_scoped) 게이지 노출.
 - 2차 프로젝트(합의): 멀티 PC ~/.claude 세션 동기화 — 자격증명 제외, 별도 스펙.
