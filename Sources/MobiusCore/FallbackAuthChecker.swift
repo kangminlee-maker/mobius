@@ -26,10 +26,28 @@ public enum FallbackCheckResult: Equatable, Sendable {
 public final class FallbackAuthChecker: @unchecked Sendable {
     let store: AccountStore
     let refresher: TokenRefresher
+    /// 계정별 진행 중 네트워크 refresh — 같은 계정의 동시 check는 새 refresh를 쏘지 않고
+    /// 이 태스크의 결과에 **합류**한다. 동시 이중 refresh는 회전(rotation) 때문에 늦은 쪽이
+    /// 이미 소비된 refresh 토큰으로 invalid_grant를 받아 **살아있는 계정을 needsReauth로
+    /// 오마킹**한다 (예: 스윕이 폴백을 갱신하는 1~2초 사이에 사용자가 그 계정을 클릭 →
+    /// preflight와 충돌). 락은 딕셔너리 접근에만 쓰고 await를 가로지르지 않는다.
+    private var inFlight: [UUID: Task<FallbackCheckResult, Never>] = [:]
+    private var joinedCount = 0
+    private let lock = NSLock()
 
     public init(store: AccountStore, refresher: TokenRefresher = OAuthTokenRefresher()) {
         self.store = store
         self.refresher = refresher
+    }
+
+    /// 합류가 실제로 일어난 횟수 (테스트 관측용)
+    var coalescedJoins: Int { withLock { joinedCount } }
+
+    /// async 컨텍스트에서 NSLock을 직접 못 쓰므로(SE-0340) 동기 구간으로 감싼다.
+    /// body는 절대 suspend하지 않는 짧은 딕셔너리 접근만 담는다.
+    private func withLock<T>(_ body: () -> T) -> T {
+        lock.lock(); defer { lock.unlock() }
+        return body()
     }
 
     /// 폴백 하나를 검증하고 부작용(스냅샷 저장 / needsReauth)을 적용한다.
@@ -43,7 +61,7 @@ public final class FallbackAuthChecker: @unchecked Sendable {
                       allowNetwork: Bool = true) async -> FallbackCheckResult {
         guard id != activeAccountID else { return .notFallback }           // 활성 절대 제외
         guard let snap = try? store.secret(for: id) else { return .noSecret }
-        guard let rt = CredentialBlob.refreshToken(from: snap.keychainBlob) else {
+        guard CredentialBlob.refreshToken(from: snap.keychainBlob) != nil else {
             try? store.setNeedsReauth(id, true); return .noRefreshToken
         }
         // 네트워크 0: refresh 토큰 자체가 시간상 만료 → 죽음 확정
@@ -51,6 +69,30 @@ public final class FallbackAuthChecker: @unchecked Sendable {
             try? store.setNeedsReauth(id, true); return .locallyDead
         }
         guard allowNetwork else { return .transient }   // 로컬 검사 통과 — 네트워크는 생략
+
+        // 같은 계정의 네트워크 refresh는 동시에 1건만 — 진행 중이면 그 결과에 합류한다.
+        let (task, joined): (Task<FallbackCheckResult, Never>, Bool) = withLock {
+            if let existing = inFlight[id] {
+                joinedCount += 1
+                return (existing, true)
+            }
+            let t = Task { await self.refreshAndStore(id, now: now) }
+            inFlight[id] = t
+            return (t, false)
+        }
+        let result = await task.value
+        if !joined { withLock { inFlight[id] = nil } }   // 생성자만 게이트 해제
+        return result
+    }
+
+    /// 실제 refresh + 회전 토큰 원자 저장 — inFlight 게이트 안에서만 호출된다.
+    /// 스냅샷은 여기서 **다시 읽는다**: 게이트 밖(check 상단)에서 읽은 토큰은 직전에 끝난
+    /// 다른 refresh의 회전으로 이미 낡았을 수 있다 (낡은 토큰 전송 = invalid_grant 오마킹).
+    private func refreshAndStore(_ id: UUID, now: Date) async -> FallbackCheckResult {
+        guard let snap = try? store.secret(for: id) else { return .noSecret }
+        guard let rt = CredentialBlob.refreshToken(from: snap.keychainBlob) else {
+            try? store.setNeedsReauth(id, true); return .noRefreshToken
+        }
         let scopes = CredentialBlob.scopes(from: snap.keychainBlob)
         do {
             let tokens = try await refresher.refresh(refreshToken: rt, scopes: scopes, now: now)
