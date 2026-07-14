@@ -438,7 +438,7 @@ final class AppState: ObservableObject {
         // 라이브와 어긋나면 UI가 /status와 달라지는 더 나쁜 버그가 된다(유예는 넣지 않는다).
         if now.timeIntervalSince(lastReconcileAt) >= Self.reconcileInterval {
             lastReconcileAt = now
-            try? await switcher.adoptLiveAccountIfUnregistered()
+            _ = try? await switcher.adoptLiveAccountIfUnregistered()
             try? await switcher.reconcile()
         }
         // 활성 계정 스냅샷을 5분마다 라이브(갱신된 토큰)와 동기화 — 오래 쓰다 크래시해도
