@@ -106,6 +106,7 @@ public struct AccountsFile: Codable, Equatable, Sendable {
     public var autoSwitchByProvider: [Provider: Bool]
     public var desktopSyncEnabled: Bool       // 수동 전환 시 Desktop 동시 전환 (Claude 전용)
     public var desktopAutoSwitchEnabled: Bool // 자동 전환 시에도 Desktop 동시 전환 (기본 끔)
+    public var resetProbeEnabled: Bool        // 한도 초기화 프로브 (실험실, 기본 끔)
 
     public init(accounts: [AccountProfile] = [], activeAccountID: UUID? = nil,
                 autoSwitchEnabled: Bool = true, desktopSyncEnabled: Bool = true,
@@ -117,6 +118,7 @@ public struct AccountsFile: Codable, Equatable, Sendable {
             : Dictionary(uniqueKeysWithValues: Provider.allCases.map { ($0, false) })
         self.desktopSyncEnabled = desktopSyncEnabled
         self.desktopAutoSwitchEnabled = desktopAutoSwitchEnabled
+        self.resetProbeEnabled = false
     }
 
     /// 하위호환 디코딩 — 풀 분리 이전(activeAccountID/autoSwitchedFromPrimary가 최상위
@@ -148,11 +150,12 @@ public struct AccountsFile: Codable, Equatable, Sendable {
         desktopSyncEnabled = try c.decodeIfPresent(Bool.self, forKey: .desktopSyncEnabled) ?? true
         desktopAutoSwitchEnabled =
             try c.decodeIfPresent(Bool.self, forKey: .desktopAutoSwitchEnabled) ?? false
+        resetProbeEnabled = try c.decodeIfPresent(Bool.self, forKey: .resetProbeEnabled) ?? false
     }
 
     enum CodingKeys: String, CodingKey {
         case accounts, activeByProvider, autoSwitchedByProvider, autoSwitchByProvider
-        case desktopSyncEnabled, desktopAutoSwitchEnabled
+        case desktopSyncEnabled, desktopAutoSwitchEnabled, resetProbeEnabled
         case legacyActiveAccountID = "activeAccountID"
         case legacyAutoSwitchedFromPrimary = "autoSwitchedFromPrimary"
         case legacyAutoSwitchEnabled = "autoSwitchEnabled"
@@ -166,6 +169,7 @@ public struct AccountsFile: Codable, Equatable, Sendable {
         try c.encode(autoSwitchByProvider, forKey: .autoSwitchByProvider)
         try c.encode(desktopSyncEnabled, forKey: .desktopSyncEnabled)
         try c.encode(desktopAutoSwitchEnabled, forKey: .desktopAutoSwitchEnabled)
+        try c.encode(resetProbeEnabled, forKey: .resetProbeEnabled)
         // 다운그레이드 완충: 풀 분리 이전 바이너리도 Claude 활성 상태는 올바르게 읽도록
         // 레거시 키를 함께 기록한다 (구버전이 저장하면 provider 필드가 소실되므로
         // 완전한 하위호환은 아님 — 신구 바이너리 혼용 금지는 문서에 기록).

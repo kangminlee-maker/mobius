@@ -379,6 +379,14 @@ struct SettingsView: View {
                 }
             }
             VStack(alignment: .leading, spacing: 3) {
+                Toggle(loc("한도 초기화 확정 (최소 호출)"), isOn: Binding(
+                    get: { state.file.resetProbeEnabled },
+                    set: { state.setResetProbe($0) }))
+                Text(loc("초기화된 계정에 최소한의 호출 1회를 보내 다음 초기화 시점을 확정하고 알림으로 알려줍니다. 호출은 소량의 사용량을 소비합니다."))
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            VStack(alignment: .leading, spacing: 3) {
                 Toggle(loc("다른 Mac과 동기화"), isOn: $syncEnabled)
                 Text(loc("이 Mac에서 켠 항목만 동기화에 참여해요. 끄면 이 Mac은 아무 영향도 받지 않아요."))
                     .font(.caption).foregroundStyle(.secondary)
