@@ -310,6 +310,22 @@ Sources/MobiusApp/        SwiftUI 메뉴바 앱 + AppState + Views/ + LoginFlow 
     `claude.com`을 아예 쓰지 않아 이 별칭에 면역이다 — 동적으로 경로를 읽는 구현이었다면
     `/cai` 접두사를 벗겨야 한다(안 벗기면 로그인 후 claude.ai/cai/… 404).
 
+17. **primary 카드를 List 밖에 두면 primary 전환 시 UI가 겹쳐 깨짐 (이슈 #5)** — 계정 카드
+    UI가 "고정 primary 카드 + fallback List(고정 frame)" 구조라, primary 전환이 List
+    멤버십 변경(승격 행 삭제 + 강등 행 삽입)으로 diff됐다. NSTableView 기반 List는 이때
+    스크롤 오프셋을 한 행 높이만큼 어긋난 채 방치 → 첫 행이 위로 잘리고 하단에 빈 공간이
+    **지속**된다. 단, **전 카드 높이가 같아 frame(height:)이 안 변할 때만**(예: 전 계정
+    게이지 표시, 또는 게이지 전부 꺼짐) 나타나고 높이가 바뀌면 오프셋이 재클램프되어 안
+    보인다 — 개발 환경(활성만 게이지)에서 재현이 안 됐던 이유. matchedGeometryEffect,
+    withAnimation은 무관(각각 제거해도 재현 — 미니 재현 앱으로 성분 분리, 2026-07-15).
+    → 풀의 전 계정을 **한 List의 행**으로 두고(primary는 moveDisabled) 전환을 같은 id 집합
+    내 "행 이동"으로 만들면 안 깨진다(프로바이더 풀별 List에 동일 적용 — providerSection).
+    교훈: (1) 고정 frame List에서 행 삽입+삭제 조합을
+    피하라 — 재정렬은 반드시 동일 데이터 집합 내 move로 모델링. (2) 안 잡히는 UI 버그는
+    조건(높이 균일 여부)을 제어할 수 있는 미니 재현 앱으로 성분을 분리하면 빠르다.
+    (3) UserDefaults 게이트는 `-키 값` 실행 인자(NSArgumentDomain)로 영구 설정 오염 없이
+    프로세스별 오버라이드해 테스트할 수 있다.
+
 ## QA / 진행 상황
 
 - `docs/qa/m1-checklist.md` 수동 QA: 2·3·6·7·9·10 완료(2026-07-11). 남은 항목: 1·4·5·8.

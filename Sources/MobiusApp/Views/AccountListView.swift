@@ -9,7 +9,6 @@ struct AccountListView: View {
     @AppStorage("showUsageGauges") private var showUsageGauges = true
     @State private var now = Date()
     private let clock = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
-    @Namespace private var cardSpace
 
     var body: some View {
         ZStack {
@@ -60,6 +59,13 @@ struct AccountListView: View {
         }
     }
 
+    // ★ primary 카드도 반드시 풀의 같은 List의 행이어야 한다 (이슈 #5). primary를 List 밖
+    // 고정 슬롯에 두면 primary 전환 때 List 멤버십이 바뀌어(승격 행 삭제 + 강등 행 삽입)
+    // NSTableView 기반 List가 스크롤 오프셋을 한 행만큼 어긋난 채 방치한다 — 카드 높이가
+    // 전부 같아 frame(height:)이 안 변하는 경우(예: 전 계정 게이지 표시)에만 나타나 재현이
+    // 까다로웠다. 풀의 전 계정을 한 List에 두면(primary는 moveDisabled) 전환이 같은 id 집합
+    // 내 "행 이동"으로 diff되어 오프셋이 깨지지 않는다 (실측: 미니 재현 앱 + 실앱 검증,
+    // 2026-07-15).
     @ViewBuilder private func providerSection(_ provider: Provider) -> some View {
         let accounts = state.file.accounts(of: provider)
         VStack(spacing: 6) {
@@ -71,31 +77,24 @@ struct AccountListView: View {
                     Spacer()
                 }
             }
-            // primary (고정)
-            if let primary = accounts.first {
-                card(primary, isPrimary: true)
-            }
-            // fallbacks (풀 내 DnD 재정렬)
-            let fallbacks = Array(accounts.dropFirst())
-            if !fallbacks.isEmpty {
-                List {
-                    ForEach(fallbacks, id: \.id) { p in
-                        card(p, isPrimary: false)
-                            .listRowInsets(EdgeInsets(top: 3, leading: 0, bottom: 3, trailing: 0))
-                            .listRowSeparator(.hidden)
-                            .listRowBackground(Color.clear)
-                    }
-                    .onMove { state.moveFallback(provider: provider, from: $0, to: $1) }
+            List {
+                ForEach(accounts, id: \.id) { p in
+                    card(p, isPrimary: p.id == accounts.first?.id)
+                        .listRowInsets(EdgeInsets(top: 3, leading: 0, bottom: 3, trailing: 0))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                        .moveDisabled(p.id == accounts.first?.id)
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-                .frame(height: fallbacks.reduce(CGFloat(0)) { sum, p in
-                    sum + AccountCardView.estimatedHeight(
-                        hasUsage: usageFor(p) != nil,
-                        scopedCount: usageFor(p)?.scopedLimits?.count ?? 0,
-                        codexHint: codexAwaitingData(p))
-                })
+                .onMove { state.moveFallback(provider: provider, from: $0, to: $1) }
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .frame(height: accounts.reduce(CGFloat(0)) { sum, p in
+                sum + AccountCardView.estimatedHeight(
+                    hasUsage: usageFor(p) != nil,
+                    scopedCount: usageFor(p)?.scopedLimits?.count ?? 0,
+                    codexHint: codexAwaitingData(p))
+            })
         }
     }
 
@@ -133,7 +132,6 @@ struct AccountListView: View {
                             }
                         },
                         onReauth: p.needsReauth && claudeCard ? { state.addAccount() } : nil)
-            .matchedGeometryEffect(id: p.id, in: cardSpace)
             .onTapGesture {
                 guard !isActive(p) else { return }
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {

@@ -812,12 +812,14 @@ final class AppState: ObservableObject {
     }
 
     func moveFallback(provider: Provider, from source: IndexSet, to destination: Int) {
-        // List.onMove는 fallback 섹션(풀 내 인덱스 1...) 기준으로 변환해 호출한다
-        guard let src = source.first else { return }
-        let from = src + 1
-        var to = destination + 1
+        // List.onMove는 풀 계정 배열 인덱스로 호출한다 (primary 행 0은 moveDisabled).
+        // destination은 "제거 전 삽입 위치"라 from보다 뒤면 1을 빼고, primary 위(0)로
+        // 떨어뜨리면 첫 fallback 자리(1)로 고정한다 — 승격은 명시적 메뉴로만.
+        guard let from = source.first else { return }
+        var to = destination
         if to > from { to -= 1 }
-        guard from != to else { return }
+        to = max(to, 1)
+        guard from != to, from >= 1 else { return }
         try? store.moveFallback(provider: provider, fromIndex: from, toIndex: to)
         MobiusNotification.postAccountsChanged()
         reload()
