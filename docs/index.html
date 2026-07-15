@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mobius — Your Claude accounts, on an infinite loop</title>
-<meta name="description" content="One-click Claude account switching for macOS. Auto-fallback when you hit usage limits, auto-return on reset. Zero server polling.">
-<meta property="og:title" content="Mobius — Your Claude accounts, on an infinite loop">
-<meta property="og:description" content="One-click Claude account switching for macOS. Auto-fallback on limits, auto-return on reset.">
+<title>Mobius — Your Claude &amp; Codex accounts, on an infinite loop</title>
+<meta name="description" content="One-click Claude &amp; Codex account switching for macOS. Auto-fallback when you hit usage limits, auto-return on reset. Zero server polling.">
+<meta property="og:title" content="Mobius — Your Claude &amp; Codex accounts, on an infinite loop">
+<meta property="og:description" content="One-click Claude &amp; Codex account switching for macOS. Auto-fallback on limits, auto-return on reset.">
 <meta property="og:image" content="https://chussum.github.io/mobius/images/social-preview.png">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♾️</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -226,8 +226,8 @@ footer{border-top:1px solid var(--line);padding:34px 0;color:var(--faint);font-s
       <span class="orbit a"></span>
       <span class="orbit b"></span>
     </div>
-    <h1 class="rise d2" data-i18n="h1">Your Claude accounts,<br>on an <span class="hl">infinite loop</span>.</h1>
-    <p class="sub rise d3" data-i18n="h1sub">Hit a usage limit? Mobius switches to your next account. When the limit resets, it switches you back. You just keep working.</p>
+    <h1 class="rise d2" data-i18n="h1">Your Claude &amp; Codex accounts,<br>on an <span class="hl">infinite loop</span>.</h1>
+    <p class="sub rise d3" data-i18n="h1sub">Hit a usage limit? Mobius switches to your next account. When the limit resets, it switches you back. Claude and OpenAI Codex each run on their own independent loop — you just keep working.</p>
     <div class="cta-row rise d4">
       <a class="btn btn-primary" href="https://github.com/chussum/mobius/releases/latest" target="_blank" rel="noopener">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 12 3.5 7.5l1-1L7 9V1h2v8l2.5-2.5 1 1L8 12Zm-6 2h12v-4h2v4c0 1.1-.9 2-2 2H2c-1.1 0-2-.9-2-2v-4h2v4Z"/></svg>
@@ -235,13 +235,13 @@ footer{border-top:1px solid var(--line);padding:34px 0;color:var(--faint);font-s
       </a>
       <a class="btn btn-ghost" href="#loop" data-i18n="cta_how">See how the loop works</a>
     </div>
-    <p class="hero-meta rise d5" data-i18n="meta">macOS 14+ · free &amp; open source · Claude Code CLI + Claude Desktop</p>
+    <p class="hero-meta rise d5" data-i18n="meta">macOS 14+ · free &amp; open source · Claude Code CLI · Codex CLI · Claude Desktop</p>
   </div>
 </header>
 
 <div class="shot rv">
   <div class="shot-frame">
-    <img src="images/screenshot.png" width="470" alt="Mobius popover with account cards and usage gauges">
+    <img src="images/screenshot.png" width="470" alt="Mobius popover with provider tabs, account cards and usage gauges">
   </div>
 </div>
 
@@ -249,7 +249,7 @@ footer{border-top:1px solid var(--line);padding:34px 0;color:var(--faint);font-s
   <div class="wrap">
     <p class="eyebrow rv" data-i18n="who_eb">Who it's for</p>
     <h2 class="rv" data-i18n="who_h2">You already have more than one account.</h2>
-    <p class="lead rv" data-i18n="who_lead">Mobius is for people who keep separate Claude accounts for separate parts of their life — and just want to move between them cleanly.</p>
+    <p class="lead rv" data-i18n="who_lead">Mobius is for people who keep separate Claude — or Codex — accounts for separate parts of their life, and just want to move between them cleanly.</p>
     <div class="grid">
       <div class="card rv">
         <div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#59a6ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V7a2 2 0 0 1 2-2h5V3a1 1 0 0 1 1-1h0M11 21V5M11 9h9a1 1 0 0 1 1 1v11M3 21h18"/></svg></div>
@@ -316,7 +316,7 @@ footer{border-top:1px solid var(--line);padding:34px 0;color:var(--faint);font-s
       <div class="card rv">
         <div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#59a6ff" stroke-width="1.8" stroke-linecap="round"><path d="M4 19V10M10 19V5M16 19v-8M22 19H2"/></svg></div>
         <h3 data-i18n="f2_h">Usage gauges</h3>
-        <p data-i18n="f2_p">5-hour and weekly meters per account, with time-to-reset. Fetched only when you open the popover, cached 4 minutes.</p>
+        <p data-i18n="f2_p">5-hour and weekly meters per account, with time-to-reset. Claude gauges are fetched only when you open the popover (cached 4 minutes); Codex gauges come straight from local logs — no server calls at all.</p>
       </div>
       <div class="card rv">
         <div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#59a6ff" stroke-width="1.8" stroke-linecap="round"><path d="M12 3l7 4v5c0 4.4-3 7.4-7 9-4-1.6-7-4.6-7-9V7l7-4z"/></svg></div>
@@ -372,7 +372,7 @@ footer{border-top:1px solid var(--line);padding:34px 0;color:var(--faint);font-s
   <div class="wrap">
     <p class="eyebrow rv" data-i18n="cli_eb">For terminal people</p>
     <h2 class="rv" data-i18n="cli_h2">Same switching, from your shell.</h2>
-    <p class="lead rv" data-i18n="cli_lead">The menu bar covers everything — but if you live in a terminal, install the <code>mobius</code> command from the app (Settings → mobius CLI) and drive the same account switching from your shell.</p>
+    <p class="lead rv" data-i18n="cli_lead">The menu bar covers everything — but if you live in a terminal, install the <code>mobius</code> command from the app (Settings → Installed Tools) and drive the same account switching from your shell.</p>
     <div class="term rv">
       <div class="term-bar"><i></i><i></i><i></i></div>
       <div class="term-body">
@@ -410,7 +410,7 @@ footer{border-top:1px solid var(--line);padding:34px 0;color:var(--faint);font-s
         <div class="n">3</div>
         <div>
           <h3 data-i18n="st3_h">Add your accounts</h3>
-          <p data-i18n="st3_p">Click the ∞ icon in the menu bar → <b>Add Account</b>. Sign in to each Claude account once — Mobius handles everything after that.</p>
+          <p data-i18n="st3_p">Click the ∞ icon in the menu bar → <b>Add Account</b>. Sign in to each Claude account once. For Codex, just run <code>codex login</code> in a terminal — Mobius registers it automatically within seconds.</p>
         </div>
       </div>
     </div>
@@ -451,12 +451,12 @@ footer{border-top:1px solid var(--line);padding:34px 0;color:var(--faint);font-s
 <script>
 const ko = {
   nav_how:"동작 방식", nav_feat:"기능", nav_install:"설치",
-  h1:'Claude 계정을<br><span class="hl">무한 루프</span> 위에 올리세요.',
-  h1sub:"한도가 차면 다음 계정으로 넘어가고, 리셋되면 원래 계정으로 돌아옵니다. 당신은 계속 일만 하세요 — 루프는 알아서 돌아갑니다.",
+  h1:'Claude·Codex 계정을<br><span class="hl">무한 루프</span> 위에 올리세요.',
+  h1sub:"한도가 차면 다음 계정으로 넘어가고, 리셋되면 원래 계정으로 돌아옵니다. Claude와 OpenAI Codex가 각자 독립된 루프로 돌아가요 — 당신은 계속 일만 하세요.",
   cta_dl:"macOS용 다운로드", cta_how:"루프 동작 보기",
-  meta:"macOS 14+ · 무료 오픈소스 · Claude Code CLI + Claude Desktop",
+  meta:"macOS 14+ · 무료 오픈소스 · Claude Code CLI · Codex CLI · Claude Desktop",
   who_eb:"이런 분께", who_h2:"이미 계정이 하나가 아니잖아요.",
-  who_lead:"Mobius는 삶의 영역마다 Claude 계정을 따로 두는 분들을 위한 앱이에요 — 그 사이를 깔끔하게 오가고 싶을 뿐인 분들.",
+  who_lead:"Mobius는 삶의 영역마다 Claude — 또는 Codex — 계정을 따로 두는 분들을 위한 앱이에요. 그 사이를 깔끔하게 오가고 싶을 뿐인 분들.",
   who1_h:"회사 ⇄ 개인", who1_p:"업무는 회사 Claude로, 사이드 프로젝트는 내 계정으로. 매번 로그아웃하고 다시 로그인할 필요 없이 그때그때 맞는 계정으로 넘어가세요.",
   who2_h:"팀 좌석 + 개인 요금제", who2_p:"회사에서 받은 팀 좌석과 직접 결제한 Pro·Max 요금제를 한 메뉴바에 정리하세요. 지금 어느 계정이 활성인지 늘 한눈에 보입니다.",
   who3_h:"CLI와 Desktop을 나란히", who3_p:"터미널의 Claude Code와 Claude Desktop이 같은 계정을 보도록 유지해요. 어디서 이어가든 로그인이 어긋나지 않습니다.",
@@ -469,7 +469,7 @@ const ko = {
   loop_note:"서버쪽 일시 제한(\"not your usage limit\")은 걸러냅니다 — 진짜 내 계정의 한도일 때만 전환합니다.",
   ft_eb:"매일 쓰라고 만든 것", ft_h2:"작은 앱, 뚜렷한 원칙.",
   f1_h:"클릭 한 번 전환", f1_p:"카드를 누르면 바로 그 계정입니다. 전환이 실패하면 이전 상태로 되돌립니다 — 어중간한 상태는 없습니다.",
-  f2_h:"사용량 게이지", f2_p:"계정마다 5시간·주간 사용량과 리셋까지 남은 시간을 보여줍니다. 팝오버를 열 때만 조회합니다(4분 캐시).",
+  f2_h:"사용량 게이지", f2_p:"계정마다 5시간·주간 사용량과 리셋까지 남은 시간을 보여줍니다. Claude는 팝오버를 열 때만 조회하고(4분 캐시), Codex는 로컬 로그에서 바로 읽어 서버 호출이 아예 없어요.",
   f3_h:"백그라운드 폴링 없음", f3_p:"한도 감지는 로컬 로그만 씁니다 — 네트워크 0. 서버 호출은 팝오버를 열 때의 사용량 게이지와 하루 한 번의 업데이트 확인뿐이고, 둘 다 끌 수 있습니다.",
   f4_h:"Claude Desktop까지", f4_p:"계정을 한 번 연결해두면 전환할 때마다 Claude Desktop도 따라 바뀌어요 — 2~5초 재시작이면 끝.",
   f5_h:"만료된 로그인 감지", f5_p:"로그인이 만료된 계정은 카드에 '다시 로그인' 버튼이 나타나고, 다시 로그인할 때까지 자동 전환에서 제외됩니다.",
@@ -481,11 +481,11 @@ const ko = {
   lab3_h:"Mac마다 선택", lab3_p:"머신별로 원하는 항목만 동기화해요. 삭제는 기본적으로 퍼지지 않고, 원할 때만 30일 휴지통을 거칩니다.",
   lab_note:'기본 꺼짐 · iCloud Drive · Google Drive · 직접 고른 폴더 모두 지원 · <strong style="color:var(--ink);font-weight:600">대화 이어 쓰기는 두 Mac의 프로젝트 경로가 같을 때</strong>',
   cli_eb:"터미널이 편한 분들께", cli_h2:"터미널에서도, 같은 전환.",
-  cli_lead:"모든 기능은 메뉴바로 충분해요. 다만 터미널이 편하다면, 앱에서 <code>mobius</code> 명령을 설치(설정 → mobius CLI)해 같은 계정 전환을 셸에서도 쓸 수 있어요.",
+  cli_lead:"모든 기능은 메뉴바로 충분해요. 다만 터미널이 편하다면, 앱에서 <code>mobius</code> 명령을 설치(설정 → 설치 현황)해 같은 계정 전환을 셸에서도 쓸 수 있어요.",
   in_eb:"설치", in_h2:"90초면 첫 전환까지 끝납니다.",
   st1_h:"다운로드 & 드래그", st1_p:"Releases에서 DMG를 받아 열고, Mobius를 Applications 폴더로 드래그하세요.",
   st2_h:"그냥 열면 끝", st2_p:"Applications에서 Mobius를 더블클릭하면 바로 열려요. Apple의 확인을 거친 정식 서명 앱이라, \"확인되지 않은 개발자\" 같은 경고를 넘길 일이 없습니다.",
-  st3_h:"계정 추가", st3_p:"메뉴바 ∞ 아이콘 → <b>계정 추가</b>. 각 Claude 계정에 한 번씩 로그인하면 이후는 Mobius가 알아서 합니다.",
+  st3_h:"계정 추가", st3_p:"메뉴바 ∞ 아이콘 → <b>계정 추가</b>. 각 Claude 계정에 한 번씩 로그인하면 이후는 Mobius가 알아서 합니다. Codex는 터미널에서 <code>codex login</code>만 하면 몇 초 안에 자동 등록돼요.",
   in_note:"<b>오픈소스인데, Apple 확인까지 받았어요.</b> 모든 배포판은 Apple 보안 검사를 통과해 경고 없이 열립니다. 그래도 궁금하면 실행되는 코드를 직접 읽어보거나 <code style=\"font-family:var(--mono);font-size:12px\">Scripts/make-app.sh</code>로 손수 빌드할 수 있어요.",
   out_h2:"한도 눈치보기는 이제 그만.", out_sub:"계정들을 루프에 올려두고, 여러 개라는 사실을 잊어버리세요.",
   out_dl:"무료로 다운로드", out_star:"GitHub에 Star 남기기",

@@ -14,11 +14,12 @@ log into another account, come back when it resets… Mobius removes that loop.
 Primary → fallback → back to primary. An endless Möbius strip — hence the name.
 
 <p align="center">
-  <img src="docs/images/screenshot.png" width="440" alt="Mobius menu bar popover — account cards, usage gauges">
+  <img src="docs/images/screenshot.png" width="440" alt="Mobius menu bar popover — provider tabs (All·Claude·Codex), account cards, usage gauges">
 </p>
 
-Click the ∞ icon in the menu bar to open this panel. Each account shows its
-**5-hour/weekly usage gauges** and **time until reset**; click a card to switch.
+Click the ∞ icon in the menu bar to open this panel. The **All / Claude / Codex tabs**
+at the top filter by provider; each account shows its **5-hour/weekly usage gauges**
+and **time until reset**, and clicking a card switches to that account.
 
 ## Is this for you?
 
@@ -71,13 +72,14 @@ for extra convenience.
 > **Developers**: build from source with
 > `Scripts/make-app.sh && open dist/Mobius.app`
 > (run `Scripts/setup-signing.sh` once for a stable signing certificate).
-> Install the `mobius` CLI via app **Settings → General → mobius CLI → Install** or `Scripts/install-cli.sh`.
+> Install the `mobius` CLI via app **Settings → Installed Tools → Mobius CLI → Install** or `Scripts/install-cli.sh`.
 > For release signing, notarization & distribution, see [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Getting started
 
-1. Menu bar ∞ icon → Settings (⚙) → **Installed Tools → Add Account**
+1. Menu bar ∞ icon → **Add Account** at the bottom
 2. Sign in with the Claude account you want to add — that's it!
+   (For Codex, just run `codex login` in a terminal — Mobius registers it within seconds.)
 
 The login window always opens in a clean session, so it never auto-approves against
 your browser's existing claude.ai session and never touches your browser. When login
@@ -96,15 +98,16 @@ instead of creating a duplicate.
 
 ### Settings toggles
 
-All in Settings (⚙). **Auto-switch** is a per-CLI toggle under Installed Tools
-(Claude Code CLI / Codex CLI each); the two Claude Desktop toggles live in the
-**Labs** (실험실) section.
+**Auto-switch** (per CLI) can be flipped right in the popover (header of the
+Claude/Codex tab, or next to each section label in the All tab), and also lives in
+Settings (⚙) → Installed Tools under each provider tab. The two Claude Desktop
+toggles are under **Installed Tools → Claude tab**, below the Claude Desktop row.
 
-| Toggle | Section | Default | What it does |
+| Toggle | Location | Default | What it does |
 |---|---|---|---|
-| Auto-switch (per CLI) | Installed Tools | On | Auto-switch when a limit is hit. Off = notification only; manual switching always works |
-| Also switch Claude Desktop on auto-switch | Labs | Off | Also switch Claude Desktop on auto-switch (Desktop restarts at that moment) |
-| Also switch Claude Desktop on account switch | Labs | Off | Co-switch Desktop on card-click switches. Works only for accounts connected to Desktop |
+| Auto-switch (per CLI) | Popover · each Installed Tools tab | On | Auto-switch when a limit is hit. Off = notification only; manual switching always works |
+| Also switch Claude Desktop on auto-switch | Installed Tools · Claude tab | Off | Also switch Claude Desktop on auto-switch (Desktop restarts at that moment) |
+| Also switch Claude Desktop on account switch | Installed Tools · Claude tab | Off | Co-switch Desktop on card-click switches. Works only for accounts connected to Desktop |
 
 ### Using Claude Desktop too
 
@@ -130,7 +133,7 @@ learns on one Mac, it knows on all of them.
 ## Terminal usage (optional)
 
 The app covers everything, but if you prefer the terminal, the `mobius` command is
-available (app **Settings → General → mobius CLI → Install**):
+available (app **Settings → Installed Tools → Mobius CLI → Install**):
 
 ```
 mobius list                        # account list per provider (active ●, priority, limit status)
