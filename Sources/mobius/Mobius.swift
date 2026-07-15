@@ -10,18 +10,22 @@ struct MobiusCLI: AsyncParsableCommand {
         subcommands: [List.self, Switch.self, Status.self, Capture.self, Auto.self])
 }
 
-func makeContext() throws -> (env: MobiusEnvironment, store: AccountStore,
-                              io: ClaudeConfigIO, codexIO: CodexConfigIO, switcher: Switcher) {
+/// - Parameter healProviders: 구버전 바이너리가 저장하며 소실시킨 per-account provider를
+///   secret 형태로 복구할지(앱 AppState.init과 동일 경로). **변경 명령(switch/capture/auto)
+///   에서만 켠다** — heal은 계정당 secret 파일을 읽고(레거시 계정은 Keychain 폴백까지),
+///   교정 시 accounts.json을 저장하므로 읽기 전용 명령(list/status)에는 과하다(리뷰 반영).
+///   미복구 상태의 표시 오류는 앱 실행 시 또는 전환 시점 heal이 잡는다.
+func makeContext(healProviders: Bool = false) throws -> (
+    env: MobiusEnvironment, store: AccountStore,
+    io: ClaudeConfigIO, codexIO: CodexConfigIO, switcher: Switcher) {
     let env = MobiusEnvironment.live()
     let kc = SystemKeychain()
     let store = try AccountStore(env: env, keychain: kc)
     let io = ClaudeConfigIO(env: env, keychain: kc)
     let codexIO = CodexConfigIO(env: env)
     let switcher = Switcher(env: env, keychain: kc, store: store, io: io, extraIOs: [codexIO])
-    // 구버전 바이너리가 저장하며 소실시킨 per-account provider 복구 — 앱(AppState.init)과
-    // 동일한 경로를 CLI에도 적용한다. 안 하면 앱을 먼저 켜기 전까지 `mobius list`에 Codex
-    // 계정이 Claude 풀로 보인다 (전환 자체는 어댑터의 형태 검증으로 안전하게 실패하지만).
-    if let reassigned = try? switcher.healMisassignedProviders(), !reassigned.isEmpty {
+    if healProviders,
+       let reassigned = try? switcher.healMisassignedProviders(), !reassigned.isEmpty {
         for r in reassigned {
             FileHandle.standardError.write(Data(
                 "⚠️ 프로바이더 정보 소실을 복구했습니다: \(r.nickname) (\(r.from.rawValue) → \(r.to.rawValue))\n".utf8))
@@ -74,7 +78,7 @@ struct Switch: ParsableCommand {
     var provider: String?
 
     func run() throws {
-        let ctx = try makeContext()
+        let ctx = try makeContext(healProviders: true)
         let wanted = try provider.map(parseProvider)
         let matches = ctx.store.file.accounts.filter {
             $0.nickname == name && (wanted == nil || $0.provider == wanted)
@@ -131,7 +135,7 @@ struct Capture: ParsableCommand {
     @Option(help: "claude(기본) 또는 codex") var provider: String = "claude"
 
     func run() throws {
-        let ctx = try makeContext()
+        let ctx = try makeContext(healProviders: true)
         let provider = try parseProvider(self.provider)
         let p: AccountProfile
         switch provider {
@@ -160,7 +164,7 @@ struct Auto: ParsableCommand {
     @Option(help: "claude 또는 codex — 미지정 시 Claude(기존 동작 보존)") var provider: String?
 
     func run() throws {
-        let ctx = try makeContext()
+        let ctx = try makeContext(healProviders: true)
         let enabled: Bool
         switch mode {
         case "on": enabled = true

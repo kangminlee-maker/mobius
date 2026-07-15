@@ -43,6 +43,9 @@ struct AccountListView: View {
     @State private var now = Date()
     @State private var showAddChooser = false
     @State private var showCodexAddGuide = false
+    /// 카드 행의 실측 콘텐츠 높이 (행 인셋 제외). poolCards의 List frame 계산에 사용 —
+    /// 계정 삭제 후 남는 키는 무해(참조 안 됨).
+    @State private var rowHeights: [UUID: CGFloat] = [:]
     private let clock = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
 
     private var tab: ProviderTab { ProviderTab(rawValue: providerTabRaw) ?? .all }
@@ -84,17 +87,23 @@ struct AccountListView: View {
             Spacer()
             // 풀 탭(또는 전체 탭인데 풀이 하나뿐)에서 그 풀의 자동 전환 토글 — 구 전역
             // 토글과 같은 자리라 익숙하고, 탭 바가 한 줄을 온전히 쓸 수 있다(100% 폭).
-            // 라벨은 어느 CLI의 전환인지 명시 (Claude Code CLI / Codex CLI — 사용자 요청).
             // 전체 탭에서 풀이 여럿이면 각 섹션 헤더의 미니 토글이 담당한다(sectionHeader).
             if let provider = headerToggleProvider {
-                Toggle(loc("%@ 자동 전환", provider.cliDisplayName), isOn: Binding(
-                    get: { state.file.isAutoSwitchEnabled(provider) },
-                    set: { state.setAutoSwitch($0, provider: provider) }))
-                    .toggleStyle(.switch).controlSize(.mini)
-                    .font(.system(size: 10))
-                    .help(loc("한도가 차면 다음 계정으로 자동으로 이어집니다"))
+                autoSwitchToggle(provider)
             }
         }
+    }
+
+    /// 풀별 자동 전환 미니 토글 — 헤더와 섹션 헤더가 공유한다 (두 자리는 픽셀 동일해야
+    /// 한다는 피드백이 있었고, 바인딩이 세 곳으로 흩어지면 드리프트한다 — 리뷰 반영).
+    /// 라벨은 어느 CLI의 전환인지 명시 (Claude Code CLI / Codex CLI — 사용자 요청).
+    private func autoSwitchToggle(_ provider: Provider) -> some View {
+        Toggle(loc("%@ 자동 전환", provider.cliDisplayName), isOn: Binding(
+            get: { state.file.isAutoSwitchEnabled(provider) },
+            set: { state.setAutoSwitch($0, provider: provider) }))
+            .toggleStyle(.switch).controlSize(.mini)
+            .font(.system(size: 10))
+            .help(loc("한도가 차면 다음 계정으로 자동으로 이어집니다"))
     }
 
     private var providersWithAccounts: [Provider] {
@@ -156,14 +165,8 @@ struct AccountListView: View {
             Rectangle()
                 .fill(Color.primary.opacity(0.08))
                 .frame(height: 1)
-            // 라벨·크기는 풀 탭 헤더 토글과 동일하게 (미세하게 다르면 어색 — 사용자 피드백)
-            Toggle(loc("%@ 자동 전환", provider.cliDisplayName), isOn: Binding(
-                get: { state.file.isAutoSwitchEnabled(provider) },
-                set: { state.setAutoSwitch($0, provider: provider) }))
-                .toggleStyle(.switch).controlSize(.mini)
-                .font(.system(size: 10))
-                .foregroundStyle(.secondary)
-                .help(loc("한도가 차면 다음 계정으로 자동으로 이어집니다"))
+            // 라벨·크기는 풀 탭 헤더 토글과 동일 (미세하게 다르면 어색 — 사용자 피드백)
+            autoSwitchToggle(provider)
         }
         .padding(.leading, 2)
     }
@@ -189,6 +192,15 @@ struct AccountListView: View {
                         // 무관 — primary 전환 시에도 행은 그대로, 크기만 다시 그려진다.
                         // 12pt는 수축감이 크다는 피드백 → 8pt (위계는 보이되 덜 쪼그라들게).
                         .padding(.horizontal, isPrimary ? 0 : 8)
+                        // 행 높이 실측 — scrollDisabled List라 추정이 실제보다 작으면 카드가
+                        // 잘리고 스크롤로도 못 본다(리뷰 지적: 재로그인 배지·큰 폰트·로케일).
+                        // 측정값이 오면 아래 frame(height:)이 실측 합으로 잡히고, 추정치는
+                        // 첫 프레임의 초기값으로만 쓰인다.
+                        .background(GeometryReader { geo in
+                            Color.clear
+                                .onAppear { rowHeights[p.id] = geo.size.height }
+                                .onChange(of: geo.size.height) { _, h in rowHeights[p.id] = h }
+                        })
                         .listRowInsets(EdgeInsets(top: 3, leading: 0, bottom: 3, trailing: 0))
                         .listRowSeparator(.hidden)
                         .listRowBackground(Color.clear)
@@ -207,11 +219,12 @@ struct AccountListView: View {
             // (픽셀 실측 2026-07-15: 카드 [21..407] vs 컨테이너 [14..416]). 음수 패딩으로 상쇄.
             .padding(.leading, -7)
             .padding(.trailing, -9)
+            // 실측 행 높이(콘텐츠 + 행 인셋 6pt) 합. 아직 측정 전인 행만 추정치.
             .frame(height: accounts.reduce(CGFloat(0)) { sum, p in
-                sum + AccountCardView.estimatedHeight(
+                sum + (rowHeights[p.id].map { $0 + 6 } ?? AccountCardView.estimatedHeight(
                     hasUsage: usageFor(p) != nil,
                     scopedCount: usageFor(p)?.scopedLimits?.count ?? 0,
-                    codexHint: codexAwaitingData(p))
+                    codexHint: codexAwaitingData(p)))
             })
         }
     }
@@ -230,11 +243,9 @@ struct AccountListView: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
             case .codex:
-                Text(loc("터미널에서 `codex logout` 후 `codex login`으로 추가할 계정에 로그인하면, Mobius가 몇 초 안에 자동으로 등록합니다."))
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 20)
+                // 계정 추가 팝오버와 같은 안내 블록 재사용 — 문구가 세 군데로 흩어지면
+                // 드리프트한다 (리뷰 반영)
+                codexAddGuide.padding(.horizontal, 24)
             }
         }
         .frame(maxWidth: .infinity).padding(.vertical, 18)

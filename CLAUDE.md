@@ -379,8 +379,10 @@ Sources/MobiusApp/        SwiftUI 메뉴바 앱 + AppState + Views/ + LoginFlow 
   유지)으로 분리하고 **Desktop 동시 전환 토글 2종을 실험실 → Claude 탭으로 이동**(Claude
   전용 기능이라 제자리). mobius CLI는 설치 현황 헤더 카드(탭과 분리된 Section), 실험실도
   Claude/Codex 탭(`labsProviderTab`) — 멀티 Mac 동기화는 Claude 탭 하위(Codex 미지원 안내).
-  List 높이 상수는 실측 기반이므로 카드 레이아웃을 바꾸면
-  `AccountCardView.estimatedHeight`를 재실측할 것.
+  List 높이는 행별 **런타임 실측**(rowHeights, GeometryReader)으로 잡고
+  `AccountCardView.estimatedHeight`는 첫 프레임 초기값으로만 쓴다 — scrollDisabled List라
+  과소추정이 잘림으로 이어지던 클래스를 제거(리뷰 반영). CLI heal은 변경 명령
+  (switch/capture/auto)에서만 실행(list/status는 스킵 — 리뷰 반영).
 - **설정 UI 재구성 + 자동 전환 풀별 분리(2026-07-12,
   `docs/design/settings-ui-restructure-prep.md` R1~R6 구현)**: autoSwitchEnabled(전역) →
   `autoSwitchByProvider`(풀별, 구 키는 디코드 시 양쪽 풀 적용 + encode 시 Claude 값 병행

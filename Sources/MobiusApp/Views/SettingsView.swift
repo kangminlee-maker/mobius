@@ -65,21 +65,30 @@ struct SettingsView: View {
 
     /// 공통 상태 행: [상태 아이콘] 이름 · 버전 / 경로
     @ViewBuilder private func toolRow(_ name: String, path: String?, version: String?) -> some View {
+        toolRow(name, path: path, checked: toolsChecked) {
+            if let version, !version.isEmpty {
+                Text(version).font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// 설치 도구 상태 행의 단일 원본 — [상태 아이콘] 이름/경로 … 트레일링(버전 또는 액션).
+    /// Mobius CLI 행도 이걸 쓴다: 같은 섹션에 나란히 그려지는 행들이 복제본이면
+    /// 스타일 변경 시 드리프트한다 (리뷰 반영).
+    @ViewBuilder private func toolRow<Trailing: View>(
+        _ name: String, path: String?, checked: Bool,
+        @ViewBuilder trailing: () -> Trailing) -> some View {
         HStack(spacing: 8) {
             if let path {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
                 VStack(alignment: .leading, spacing: 1) {
-                    HStack {
-                        Text(name).font(.system(size: 12, weight: .medium))
-                        Spacer()
-                        if let version, !version.isEmpty {
-                            Text(version).font(.system(size: 11)).foregroundStyle(.secondary)
-                        }
-                    }
+                    Text(name).font(.system(size: 12, weight: .medium))
                     Text(path).font(.system(size: 9)).foregroundStyle(.tertiary).lineLimit(1)
                         .truncationMode(.middle)
                 }
-            } else if !toolsChecked {
+                Spacer()
+                trailing()
+            } else if !checked {
                 ProgressView().controlSize(.small)
                 Text(name).font(.system(size: 12, weight: .medium))
                 Spacer()
@@ -89,6 +98,7 @@ struct SettingsView: View {
                 Text(name).font(.system(size: 12, weight: .medium))
                 Spacer()
                 Text(loc("설치 안 됨")).font(.system(size: 11)).foregroundStyle(.orange)
+                trailing()
             }
         }
     }
@@ -231,32 +241,16 @@ struct SettingsView: View {
         .padding(.horizontal, 10).padding(.vertical, 6)
     }
 
-    /// mobius CLI 행 (설치 현황 공통 영역) — Claude/Codex CLI 행(toolRow)과 같은
-    /// 상태 아이콘·이름·경로 스타일, 오른쪽엔 버전 대신 설치/재설치/삭제 액션.
+    /// mobius CLI 행 (설치 현황 공통 영역) — toolRow 공용 레이아웃 + 트레일링 액션.
     @ViewBuilder private var mobiusCLIRow: some View {
-        HStack(spacing: 8) {
-            if !mobiusPaths.isEmpty {
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Mobius CLI").font(.system(size: 12, weight: .medium))
-                    Text(mobiusPaths.joined(separator: "  ·  "))
-                        .font(.system(size: 9)).foregroundStyle(.tertiary)
-                        .lineLimit(1).truncationMode(.middle)
-                }
-                Spacer()
+        toolRow("Mobius CLI",
+                path: mobiusPaths.isEmpty ? nil : mobiusPaths.joined(separator: "  ·  "),
+                checked: mobiusChecked) {
+            if mobiusPaths.isEmpty {
+                Button(loc("설치")) { installMobius() }
+            } else {
                 Button(loc("재설치")) { reinstallMobius() }
                 Button(loc("삭제"), role: .destructive) { uninstallMobius() }
-            } else if !mobiusChecked {
-                ProgressView().controlSize(.small)
-                Text("Mobius CLI").font(.system(size: 12, weight: .medium))
-                Spacer()
-                Text(loc("확인 중…")).font(.caption).foregroundStyle(.secondary)
-            } else {
-                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                Text("Mobius CLI").font(.system(size: 12, weight: .medium))
-                Spacer()
-                Text(loc("설치 안 됨")).font(.system(size: 11)).foregroundStyle(.orange)
-                Button(loc("설치")) { installMobius() }
             }
         }
         if !cliMessage.isEmpty {
