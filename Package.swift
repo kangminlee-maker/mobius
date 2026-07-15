@@ -19,7 +19,8 @@ let package = Package(
             "MobiusCore",
             .product(name: "ArgumentParser", package: "swift-argument-parser"),
         ]),
-        .executableTarget(name: "MobiusApp", dependencies: ["MobiusCore"]),
+        .executableTarget(name: "MobiusApp", dependencies: ["MobiusCore"],
+                          resources: [.copy("Resources/kakaopay-qr.png")]),
         .testTarget(name: "MobiusCoreTests", dependencies: ["MobiusCore"]),
     ]
 )
