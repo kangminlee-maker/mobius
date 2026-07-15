@@ -228,43 +228,37 @@ struct SettingsView: View {
         .padding(.horizontal, 10).padding(.vertical, 6)
     }
 
-    /// mobius CLI 행 (일반 섹션) — 설치 상태 pill + 설치/재설치/삭제
+    /// mobius CLI 행 (설치 현황 공통 영역) — Claude/Codex CLI 행(toolRow)과 같은
+    /// 상태 아이콘·이름·경로 스타일, 오른쪽엔 버전 대신 설치/재설치/삭제 액션.
     @ViewBuilder private var mobiusCLIRow: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 6) {
-                    Text("mobius CLI")
-                    statusPill(installed: !mobiusPaths.isEmpty)
-                }
-                if !mobiusPaths.isEmpty {
+        HStack(spacing: 8) {
+            if !mobiusPaths.isEmpty {
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("mobius CLI").font(.system(size: 12, weight: .medium))
                     Text(mobiusPaths.joined(separator: "  ·  "))
                         .font(.system(size: 9)).foregroundStyle(.tertiary)
                         .lineLimit(1).truncationMode(.middle)
                 }
-            }
-            Spacer()
-            if mobiusChecked {
-                if mobiusPaths.isEmpty {
-                    Button(loc("설치")) { installMobius() }
-                } else {
-                    Button(loc("재설치")) { reinstallMobius() }
-                    Button(loc("삭제"), role: .destructive) { uninstallMobius() }
-                }
+                Spacer()
+                Button(loc("재설치")) { reinstallMobius() }
+                Button(loc("삭제"), role: .destructive) { uninstallMobius() }
+            } else if !mobiusChecked {
+                ProgressView().controlSize(.small)
+                Text("mobius CLI").font(.system(size: 12, weight: .medium))
+                Spacer()
+                Text(loc("확인 중…")).font(.caption).foregroundStyle(.secondary)
+            } else {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                Text("mobius CLI").font(.system(size: 12, weight: .medium))
+                Spacer()
+                Text(loc("설치 안 됨")).font(.system(size: 11)).foregroundStyle(.orange)
+                Button(loc("설치")) { installMobius() }
             }
         }
         if !cliMessage.isEmpty {
             Text(cliMessage).font(.caption).foregroundStyle(.secondary)
         }
-    }
-
-    /// 설치 상태 pill — AccountCardView의 PRIMARY 캡슐과 같은 스타일
-    private func statusPill(installed: Bool) -> some View {
-        let color: Color = installed ? .green : .orange
-        return Text(installed ? loc("설치됨") : loc("미설치"))
-            .font(.system(size: 8, weight: .bold))
-            .padding(.horizontal, 5).padding(.vertical, 2)
-            .background(color.opacity(0.18), in: Capsule())
-            .foregroundStyle(color)
     }
 
     /// fallback이 없는 상태 = 어느 프로바이더 풀에도 계정이 2개 이상 없다.
