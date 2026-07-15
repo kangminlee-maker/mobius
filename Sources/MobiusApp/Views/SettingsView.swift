@@ -21,8 +21,11 @@ struct SettingsView: View {
     @State private var mobiusChecked = false
     /// 설치 현황의 프로바이더 탭 — 팝오버와 같은 필 탭, 마지막 선택 유지.
     @AppStorage("settingsProviderTab") private var settingsTabRaw = Provider.claude.rawValue
+    /// 실험실의 프로바이더 탭 (설치 현황과 독립).
+    @AppStorage("labsProviderTab") private var labsTabRaw = Provider.claude.rawValue
 
     private var settingsTab: Provider { Provider(rawValue: settingsTabRaw) ?? .claude }
+    private var labsTab: Provider { Provider(rawValue: labsTabRaw) ?? .claude }
 
     var body: some View {
         settingsForm
@@ -460,6 +463,22 @@ struct SettingsView: View {
 
     private var labsSection: some View {
         Section(loc("실험실")) {
+            PillPicker(options: Provider.allCases.map {
+                .init(value: $0.rawValue, label: $0.displayName)
+            }, selection: $labsTabRaw, fillsWidth: true)
+            switch labsTab {
+            case .claude:
+                claudeLabs
+            case .codex:
+                Text(loc("Codex용 실험 기능은 아직 없어요."))
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                    .padding(.vertical, 4)
+            }
+        }
+    }
+
+    /// Claude 실험 기능 — 멀티 Mac 동기화 (~/.claude 작업 데이터 미러).
+    @ViewBuilder private var claudeLabs: some View {
             VStack(alignment: .leading, spacing: 3) {
                 Toggle(loc("다른 Mac과 동기화"), isOn: $syncEnabled)
                 Text(loc("이 Mac에서 켠 항목만 동기화에 참여해요. 끄면 이 Mac은 아무 영향도 받지 않아요."))
@@ -531,7 +550,6 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-        }
     }
 
     private func pickSyncFolder() {
