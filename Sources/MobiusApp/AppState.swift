@@ -59,6 +59,7 @@ final class AppState: ObservableObject {
     let watcher: SessionLogWatcher<RateLimitHit>              // Claude 세션 로그
     let codexWatcher: SessionLogWatcher<CodexRateLimitStatus> // Codex 세션 로그
     let codexRouter = CodexStatusRouter() // 전환 전 세션 파일 격리 (계정 오귀속 방지)
+    let resetProber = ResetProber() // 리셋 프로브 판단부 (창당 1회/백오프, resetProbeEnabled 게이팅)
     let engines: [Provider: AutoSwitchEngine] = [
         .claude: AutoSwitchEngine(provider: .claude),
         .codex: AutoSwitchEngine(provider: .codex),
@@ -591,8 +592,103 @@ final class AppState: ObservableObject {
             await apply(engines[provider]!.onTick(file: store.file, now: now),
                         provider: provider, now: now)
         }
+        runResetProbeIfDue(now: now)
         file = store.file
     }
+
+    // MARK: 한도 초기화 프로브 (실험실, 기본 끔 — ResetProber.due가 resetProbeEnabled로 게이팅)
+    private var resetProbeTask: Task<Void, Never>?
+    private var codexProbeBinary: String??
+
+    private func runResetProbeIfDue(now: Date) {
+        guard resetProbeTask == nil else { return } // 동시 프로브 1건
+        let due = resetProber.due(file: store.file, now: now)
+        // Codex는 활성 계정만 프로브 가능 (비활성 계정 턴 실행은 토큰 회전 위험 — v1 제외).
+        // 비활성 codex 계정은 시도 소모 없이 대기 — 활성이 되면(자동 복귀 등) 그때 프로브.
+        guard let target = due.first(where: { p in
+            p.provider == .claude || p.id == store.file.activeByProvider[.codex]
+        }), let resetsAt = target.rateLimit?.resetsAt else { return }
+        resetProbeTask = Task { @MainActor [weak self] in
+            defer { self?.resetProbeTask = nil }
+            await self?.runResetProbe(target, resetsAt: resetsAt)
+        }
+    }
+
+    private func runResetProbe(_ target: AccountProfile, resetsAt: Date) async {
+        do {
+            let outcome: ResetProbeOutcome
+            switch target.provider {
+            case .claude:
+                guard let secret = try? store.secret(for: target.id) else {
+                    resetProber.noteGiveUp(target.id, resetsAt: resetsAt)
+                    return
+                }
+                let blob = secret.keychainBlob
+                outcome = try await Task.detached(priority: .utility) {
+                    try await ClaudeResetProbe.execute(keychainBlob: blob)
+                }.value
+            case .codex:
+                if codexProbeBinary == nil {
+                    codexProbeBinary = await Task.detached(priority: .utility) {
+                        ToolInventory.locateCodexCLI()?.path
+                    }.value
+                }
+                guard let binary = codexProbeBinary ?? nil else {
+                    resetProber.noteGiveUp(target.id, resetsAt: resetsAt) // CLI 없음 — 재시도 무의미
+                    return
+                }
+                let probe = CodexResetProbe(binaryPath: binary, sessionsDir: env.codexSessionsDir)
+                outcome = try await Task.detached(priority: .utility) {
+                    try await probe.execute()
+                }.value
+            }
+            handleProbeOutcome(outcome, target: target, resetsAt: resetsAt)
+        } catch {
+            // 재시도 대상 실패(네트워크/exec) — 시도 소진 시에만 사용자에게 알린다
+            if resetProber.noteFailure(target.id, resetsAt: resetsAt, now: Date()) {
+                notify(title: loc("%@ 한도 초기화됨", target.nickname),
+                       body: loc("초기화 시점을 확정하지 못했어요 — 다음 사용 시 5시간 창이 시작됩니다."))
+            }
+        }
+    }
+
+    private func handleProbeOutcome(_ outcome: ResetProbeOutcome,
+                                    target: AccountProfile, resetsAt: Date) {
+        switch outcome {
+        case let .pinned(snap):
+            resetProber.noteSuccess(target.id, resetsAt: resetsAt)
+            usage[target.id] = snap
+            clearStaleRateLimit(target.id)
+            let time = snap.fiveHourResetsAt.map { Self.probeTimeFormatter.string(from: $0) } ?? "?"
+            notify(title: loc("%@ 한도 초기화됨", target.nickname),
+                   body: loc("다음 초기화: %@", time))
+        case .unconfirmed:
+            // 최소 호출은 성공 = 창은 시작됨. 시각 확인만 실패 — 재호출하지 않는다.
+            resetProber.noteSuccess(target.id, resetsAt: resetsAt)
+            clearStaleRateLimit(target.id)
+            notify(title: loc("%@ 한도 초기화됨", target.nickname),
+                   body: loc("다음 초기화 시점 확인에 실패했어요 — 게이지가 곧 갱신됩니다."))
+        case .tokenExpired, .unauthorized:
+            resetProber.noteGiveUp(target.id, resetsAt: resetsAt)
+            notify(title: loc("%@ 한도 초기화됨", target.nickname),
+                   body: loc("초기화 시점을 확정하지 못했어요 — 다음 사용 시 5시간 창이 시작됩니다."))
+        }
+    }
+
+    /// 프로브가 창 시작을 확인했으면 낡은 소진 기록은 진실이 아니다 — 해제해 카드
+    /// 카운트다운을 걷어내고, 재시작 후 재프로브 트리거도 자연 소멸시킨다.
+    private func clearStaleRateLimit(_ id: UUID) {
+        try? store.update(id) { $0.rateLimit = nil }
+        MobiusNotification.postAccountsChanged()
+        reload()
+    }
+
+    private static let probeTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .none
+        f.timeStyle = .short
+        return f
+    }()
 
     private func recordHit(_ hit: RateLimitHit, on accountID: UUID?, now: Date) {
         guard let accountID else { return }
@@ -851,6 +947,12 @@ final class AppState: ObservableObject {
 
     func setDesktopAutoSwitch(_ on: Bool) {
         try? store.setDesktopAutoSwitch(on)
+        MobiusNotification.postAccountsChanged()
+        reload()
+    }
+
+    func setResetProbe(_ on: Bool) {
+        try? store.setResetProbe(on)
         MobiusNotification.postAccountsChanged()
         reload()
     }
