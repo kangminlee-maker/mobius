@@ -30,16 +30,25 @@ public final class SessionLogWatcher<Event: Sendable>: @unchecked Sendable {
     let root: URL
     let policy: UnseenFilePolicy
     let parse: @Sendable (_ line: String, _ now: Date) -> Event?
+    /// 이번 스캔에서 열거할 하위 디렉토리를 좁히는 선택자(주입). nil이면 root 전체를 재귀 열거.
+    /// 날짜 파티션 루트(Codex: YYYY/MM/DD, 실측 5만 파일/19GB)에서 최근 창의 폴더만 열거해
+    /// 매 틱 전수 walk(getattrlistbulk)로 CPU를 태우는 것을 막는다. 좁힌 열거는 "새 파일 발견"
+    /// 용도이고, 이미 추적 중인 파일은 폴더 나이와 무관하게 직접 확인하므로(아래 scanBatches)
+    /// 며칠 지난 옛 폴더의 resume append도 놓치지 않는다.
+    let recentDirs: (@Sendable (_ now: Date) -> [URL]?)?
     private var offsets: [String: UInt64] = [:]   // 파일 경로 → 읽은 위치
-    private var primed = false                    // 첫 스캔 여부 (parseFromStart에서만 의미)
+    private var primed = false                    // 첫 스캔 여부 — parseFromStart의 프라이밍 판정
+                                                  // + recentDirs 프루닝 게이트(첫 스캔은 전수 시딩)
     private let lock = NSLock()
     /// 이 시간 안에 수정된 파일만 본다
     public var recentWindow: TimeInterval = 600
 
     public init(root: URL, policy: UnseenFilePolicy = .parseFromStart,
+                recentDirs: (@Sendable (_ now: Date) -> [URL]?)? = nil,
                 parse: @escaping @Sendable (_ line: String, _ now: Date) -> Event?) {
         self.root = root
         self.policy = policy
+        self.recentDirs = recentDirs
         self.parse = parse
     }
 
@@ -52,10 +61,46 @@ public final class SessionLogWatcher<Event: Sendable>: @unchecked Sendable {
         lock.lock(); defer { lock.unlock() }
         var batches: [Batch] = []
         let fm = FileManager.default
-        guard let en = fm.enumerator(at: root,
-                                     includingPropertiesForKeys: [.contentModificationDateKey])
-        else { return [] }
-        for case let url as URL in en where url.pathExtension == "jsonl" {
+
+        // 후보 파일 수집.
+        // recentDirs 주입 시(Codex, 날짜 파티션): 최근 창의 폴더만 열거해 수만 파일 전수 walk를
+        //   피하고, 추적 중인 파일은 폴더 나이와 무관하게 직접 포함한다(옛 폴더 resume의 append를
+        //   놓치지 않도록). 사라진 파일의 오프셋은 함께 정리해 추적 집합이 무한정 커지지 않게 한다.
+        // ★ 단 첫 스캔(프라이밍)은 프루닝하지 않고 root 전체를 열거한다 — offsets가 메모리
+        //   전용이라 앱 재시작(또는 Mobius가 꺼진 채 codex 사용) 후엔 추적이 리셋되는데, 그때
+        //   창 밖 옛 폴더에서 이미 최근 수정된 세션(resume 중)을 시딩해 둬야 이후 direct-stat이
+        //   그 append를 이어 잡는다. 프라이밍은 파싱 없이 오프셋만 기록하므로 부작용 없이 1회
+        //   비용(전수 열거)뿐이고, 스캔은 유틸리티 태스크라 UI를 막지 않는다.
+        // 미주입 시(Claude, 프로젝트별 구조): 기존대로 root 전체를 재귀 열거.
+        let candidates: [URL]
+        if let recentDirs, primed, let dirs = recentDirs(now) {
+            var seen = Set<String>()
+            var urls: [URL] = []
+            for dir in dirs {
+                guard let en = fm.enumerator(at: dir,
+                                             includingPropertiesForKeys: [.contentModificationDateKey])
+                else { continue }
+                for case let url as URL in en where url.pathExtension == "jsonl" {
+                    if seen.insert(url.path).inserted { urls.append(url) }
+                }
+            }
+            // 추적 중이지만 최근 폴더 밖에 있는 파일(며칠 전 세션 resume)도 직접 확인 대상에 넣는다.
+            for path in offsets.keys where seen.insert(path).inserted {
+                if fm.fileExists(atPath: path) {
+                    urls.append(URL(fileURLWithPath: path))
+                } else {
+                    offsets[path] = nil // 삭제된 파일 — 추적 해제
+                }
+            }
+            candidates = urls
+        } else {
+            guard let en = fm.enumerator(at: root,
+                                         includingPropertiesForKeys: [.contentModificationDateKey])
+            else { return [] }
+            candidates = en.compactMap { $0 as? URL }.filter { $0.pathExtension == "jsonl" }
+        }
+
+        for url in candidates {
             let mtime = (try? url.resourceValues(forKeys: [.contentModificationDateKey])
                 .contentModificationDate) ?? .distantPast
             let recent = mtime > now.addingTimeInterval(-recentWindow)
@@ -146,11 +191,44 @@ extension SessionLogWatcher where Event == RateLimitHit {
 }
 
 extension SessionLogWatcher where Event == CodexRateLimitStatus {
+    /// 최근 `days`일(당일 포함)의 날짜 파티션 폴더 경로 목록 — 옛 세션 resume 지평까지 커버.
+    /// 실측: resume는 며칠 지난 파일에 이어 쓴다(7/8→7/12=4일). 넉넉히 7일을 열거 대상으로 잡되,
+    /// 이보다 오래 전에 마지막으로 본 파일도 한 번 추적되면 recentDirs 밖 직접 확인으로 이어진다.
+    static let codexLookbackDays = 7
+
+    /// 날짜 파티션 폴더 경로(root/YYYY/MM/DD) — 로컬 날짜 기준. 테스트도 이 함수를 직접 호출해
+    /// 경로 계산이 프로덕션과 어긋날 여지를 없앤다.
+    static func dateDir(root: URL, for date: Date) -> URL {
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = .current
+        let c = cal.dateComponents([.year, .month, .day], from: date)
+        return root
+            .appendingPathComponent(String(format: "%04d", c.year ?? 0))
+            .appendingPathComponent(String(format: "%02d", c.month ?? 0))
+            .appendingPathComponent(String(format: "%02d", c.day ?? 0))
+    }
+
+    /// 최근 창의 날짜 폴더들. **내일(+1)까지 포함** — 폴더 명명이 로컬 날짜라 타임존 변경·시계
+    /// 스큐로 세션이 '내일' 폴더에 떨어져도 잡히게 하는 공짜 보험(없는 폴더 열거는 no-op).
+    /// 어제~`days`일 전은 옛 세션 resume 지평(실측 7/8→7/12=4일)을 커버한다.
+    static func recentDateDirs(root: URL, now: Date, days: Int) -> [URL] {
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = .current
+        return (-1...days).compactMap { back in
+            cal.date(byAdding: .day, value: -back, to: now).map { dateDir(root: root, for: $0) }
+        }
+    }
+
     /// Codex 세션 로그 감시 (~/.codex/sessions + CodexRateLimitParser).
     /// tailOnly — 세션 로그가 수만 개이고 resume가 옛 파일에 이어 쓰므로(실측)
-    /// 히스토리 재생 없이 새 append만 본다.
+    /// 히스토리 재생 없이 새 append만 본다. 루트가 YYYY/MM/DD 날짜 파티션이라 최근 창의 폴더만
+    /// 열거(recentDirs)해 매 틱 전수 walk를 피한다 — 추적된 파일의 append는 폴더 나이와 무관하게 잡힌다.
     public static func codex(env: MobiusEnvironment) -> SessionLogWatcher<CodexRateLimitStatus> {
-        SessionLogWatcher(root: env.codexSessionsDir, policy: .tailOnly) { line, _ in
+        let root = env.codexSessionsDir
+        let days = codexLookbackDays
+        return SessionLogWatcher(
+            root: root,
+            policy: .tailOnly,
+            recentDirs: { now in recentDateDirs(root: root, now: now, days: days) }
+        ) { line, _ in
             CodexRateLimitParser.parse(line: line)
         }
     }
