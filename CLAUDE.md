@@ -406,6 +406,11 @@ Sources/MobiusApp/        SwiftUI 메뉴바 앱 + AppState + Views/ + LoginFlow 
   교차확인해 **진짜 창 소진만 기록하고 창 여유면 무시**(교차확인은 활성 계정 라이브 토큰 사용).
   프리미엄 유지 전환은 P3가 아니라 **모델 스코프 한도(usage scopedLimits/Fable) 소진**을 신뢰
   신호로 삼는 별도 후속. (앞서 'P3=프리미엄 한도'로 오판해 비핀 전환을 넣었다가 이 정정으로 되돌림.)
+- ★ **Bundle.module 번들 리소스가 다른 Mac의 릴리즈 빌드에서 크래시 보고(2026-07-16, 원인
+  미규명)** — v0.3.0 후원 QR(SwiftPM `.copy` 리소스 + `Bundle.module.url`)이 개발 Mac에선
+  정상이었으나 타 Mac에서 버튼 클릭 시 크래시. Fairy 링크로 교체하며 리소스 로딩 자체를
+  제거해 소멸. 앱에서 Bundle.module 리소스를 다시 쓰려면 **릴리즈 DMG를 다른 Mac에서 검증**
+  필수 (Bundle.module 접근자는 번들을 못 찾으면 fatalError한다).
 - 후속 후보: accounts.json 파일 락, 세션 로그 기반 인증 에러 감지, Codex 재로그인 감지,
   usage `limits[]`의 모델 스코프 주간 한도(weekly_scoped) 게이지 노출.
 - 2차 프로젝트(합의): 멀티 PC ~/.claude 세션 동기화 — 자격증명 제외, 별도 스펙.

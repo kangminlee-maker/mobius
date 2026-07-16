@@ -19,7 +19,6 @@ struct SettingsView: View {
     @State private var claudeInstallMessage = ""
     @State private var mobiusPaths: [String] = []
     @State private var mobiusChecked = false
-    @State private var showSupportQR = false
     /// 설치 현황의 프로바이더 탭 — 팝오버와 같은 필 탭, 마지막 선택 유지.
     @AppStorage("settingsProviderTab") private var settingsTabRaw = Provider.claude.rawValue
     /// 실험실의 프로바이더 탭 (설치 현황과 독립).
@@ -370,8 +369,9 @@ struct SettingsView: View {
         .frame(width: 580, height: needsFallbackOnboarding ? 820 : 680)
     }
 
-    /// 후원 — 버튼을 누르면 카카오페이 QR 팝오버를 띄운다 (앱 내 결제 아님).
+    /// 후원 — Fairy 후원 페이지를 브라우저로 연다 (앱 내 결제 아님).
     /// 매일 보는 팝오버가 아니라 설정에만 둔다 — 작업 공간에 후원 버튼은 부담스럽다.
+    /// (이전 카카오페이 QR은 번들 리소스 로딩이 일부 Mac에서 크래시를 일으켜 링크로 교체.)
     private var supportSection: some View {
         Section(loc("후원")) {
             HStack(spacing: 12) {
@@ -384,46 +384,18 @@ struct SettingsView: View {
                 }
                 Spacer()
                 Button {
-                    showSupportQR.toggle()
+                    if let url = URL(string: "https://fairy.hada.io/@mobius") {
+                        NSWorkspace.shared.open(url)
+                    }
                 } label: {
-                    Label(loc("카카오페이로 응원하기"), systemImage: "cup.and.saucer.fill")
+                    Label(loc("Fairy에서 응원하기"), systemImage: "cup.and.saucer.fill")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.black.opacity(0.85))
                 }
                 .buttonStyle(.borderedProminent)
-                // 카카오 브랜드 옐로 (#FFEB00) — 라벨은 카카오 관례대로 검정
-                .tint(Color(red: 1.0, green: 0.92, blue: 0.0))
-                .popover(isPresented: $showSupportQR, arrowEdge: .bottom) {
-                    supportQRPopover
-                }
+                .tint(Color(red: 0.35, green: 0.65, blue: 1.0))
             }
             .padding(.vertical, 2)
         }
-    }
-
-    /// 카카오페이 송금 QR — 번들 이미지를 그대로 보여주고 스캔을 안내한다.
-    private var supportQRPopover: some View {
-        VStack(spacing: 10) {
-            Text(loc("커피 한 잔의 응원, 고마워요 ☕"))
-                .font(.system(size: 13, weight: .semibold))
-            if let url = Bundle.module.url(forResource: "kakaopay-qr", withExtension: "png"),
-               let image = NSImage(contentsOf: url) {
-                Image(nsImage: image)
-                    .resizable()
-                    .interpolation(.high)
-                    .scaledToFit()
-                    .frame(width: 210, height: 210)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .overlay(RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.primary.opacity(0.08), lineWidth: 1))
-            }
-            Text(loc("휴대폰 카메라나 카카오페이 앱으로\nQR 코드를 스캔해 주세요."))
-                .font(.system(size: 11)).foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            Text(loc("스캔하면 카카오페이 송금 화면으로 이어져요."))
-                .font(.system(size: 10)).foregroundStyle(.tertiary)
-        }
-        .padding(16)
     }
 
     /// Desktop 토글 2종의 차이를 설명하는 ⓘ 팝오버 — "언제 / 하는 일 / 나머지는 누가"
