@@ -515,6 +515,16 @@ struct SettingsView: View {
 
     private var labsSection: some View {
         Section(loc("실험실")) {
+            // 리셋 프로브는 두 풀 모두를 프로브하므로(ResetProber.due는 풀 구분 없음)
+            // 탭 안이 아니라 섹션 전역에 둔다.
+            VStack(alignment: .leading, spacing: 3) {
+                Toggle(loc("한도 초기화 확정 (최소 호출)"), isOn: Binding(
+                    get: { state.file.resetProbeEnabled },
+                    set: { state.setResetProbe($0) }))
+                Text(loc("초기화된 계정에 최소한의 호출 1회를 보내 다음 초기화 시점을 확정하고 알림으로 알려줍니다. 호출은 소량의 사용량을 소비합니다."))
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             PillPicker(options: Provider.allCases.map {
                 .init(value: $0.rawValue, label: $0.displayName)
             }, selection: $labsTabRaw, fillsWidth: true)
@@ -531,14 +541,6 @@ struct SettingsView: View {
 
     /// Claude 실험 기능 — 멀티 Mac 동기화 (~/.claude 작업 데이터 미러).
     @ViewBuilder private var claudeLabs: some View {
-            VStack(alignment: .leading, spacing: 3) {
-                Toggle(loc("한도 초기화 확정 (최소 호출)"), isOn: Binding(
-                    get: { state.file.resetProbeEnabled },
-                    set: { state.setResetProbe($0) }))
-                Text(loc("초기화된 계정에 최소한의 호출 1회를 보내 다음 초기화 시점을 확정하고 알림으로 알려줍니다. 호출은 소량의 사용량을 소비합니다."))
-                    .font(.caption).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
             VStack(alignment: .leading, spacing: 3) {
                 Toggle(loc("다른 Mac과 동기화"), isOn: $syncEnabled)
                 Text(loc("이 Mac에서 켠 항목만 동기화에 참여해요. 끄면 이 Mac은 아무 영향도 받지 않아요."))

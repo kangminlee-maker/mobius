@@ -420,7 +420,9 @@ Sources/MobiusApp/        SwiftUI 메뉴바 앱 + AppState + Views/ + LoginFlow 
   `docs/design/reset-probe-prep.md`)**: 소진→리셋된 계정의 5h 창은 첫 호출 전까지 다음
   리셋 미정(실측: 유휴 시 resets_at null, GET은 창을 안 시작; Codex도 동일 의미론).
   리셋 도래 시 최소 호출 1회로 창 확정 + rateLimit 해제 + 알림("다음 초기화 HH:mm").
-  실험실 섹션 전역 토글 `resetProbeEnabled`(기본 끔). Claude: /v1/messages가 시스템
+  실험실 섹션 전역 토글 `resetProbeEnabled`(기본 끔) — `ResetProber.due`가 풀 구분 없이
+  두 풀을 프로브하므로 실험실의 Claude/Codex 탭 **위**(탭 밖)에 둔다. 탭 안에 넣으면 한쪽
+  풀에서 안 보이는 토글이 그 풀을 지배한다. Claude: /v1/messages가 시스템
   프롬프트 없이 OAuth 수락(haiku-4-5, max_tokens 1; usage 반영 지연 15~30초 → 폴링,
   리셋 시각 10분 그리드 스냅), 비활성 계정도 가능·만료 토큰은 스킵(리프레시 금지).
   Codex: 활성 계정만, `codex exec --json`의 thread_id로 rollout 파일 특정해 직접 파싱
